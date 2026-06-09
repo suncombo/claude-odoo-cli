@@ -253,6 +253,33 @@ def cmd_search_read(client, args):
     return client.execute_kw(args.model, "search_read", [domain], kwargs)
 
 
+def cmd_read(client, args):
+    kwargs = dict(_context_kwargs(args))
+    fields = coerce_json(args.fields)
+    if fields is not None:
+        kwargs["fields"] = fields
+    return client.execute_kw(args.model, "read", [coerce_json(args.ids)], kwargs)
+
+
+def cmd_create(client, args):
+    return client.execute_kw(
+        args.model, "create", [coerce_json(args.values)], _context_kwargs(args)
+    )
+
+
+def cmd_write(client, args):
+    return client.execute_kw(
+        args.model,
+        "write",
+        [coerce_json(args.ids), coerce_json(args.values)],
+        _context_kwargs(args),
+    )
+
+
+def cmd_unlink(client, args):
+    return client.execute_kw(args.model, "unlink", [coerce_json(args.ids)])
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="odoo", description="Odoo ERP CLI over JSON-RPC")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -278,6 +305,28 @@ def build_parser():
     sr.add_argument("--offset", type=int, default=0)
     sr.add_argument("--order")
     sr.set_defaults(func=cmd_search_read)
+
+    rd = sub.add_parser("read", parents=[conn, out])
+    rd.add_argument("model")
+    rd.add_argument("--ids", required=True)
+    rd.add_argument("--fields")
+    rd.set_defaults(func=cmd_read)
+
+    cr = sub.add_parser("create", parents=[conn, out])
+    cr.add_argument("model")
+    cr.add_argument("--values", required=True)
+    cr.set_defaults(func=cmd_create)
+
+    wr = sub.add_parser("write", parents=[conn, out])
+    wr.add_argument("model")
+    wr.add_argument("--ids", required=True)
+    wr.add_argument("--values", required=True)
+    wr.set_defaults(func=cmd_write)
+
+    ul = sub.add_parser("unlink", parents=[conn, out])
+    ul.add_argument("model")
+    ul.add_argument("--ids", required=True)
+    ul.set_defaults(func=cmd_unlink)
 
     return parser
 

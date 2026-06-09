@@ -313,3 +313,38 @@ def test_main_odoo_error_returns_code(capsys, tmp_path):
                    client_factory=boom_factory)
     assert rc == odoo.EXIT_ODOO
     assert json.loads(capsys.readouterr().out)["error"].startswith("Access denied")
+
+
+def test_main_read_maps(capsys, capture_client, tmp_path):
+    odoo.main(["read", "res.partner", "--ids", "[1,2]", "--fields", '["name"]']
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert method == "read"
+    assert args == [[1, 2]]
+    assert kwargs["fields"] == ["name"]
+
+
+def test_main_create_maps(capsys, capture_client, tmp_path):
+    odoo.main(["create", "res.partner", "--values", '{"name":"Bob"}']
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert method == "create"
+    assert args == [{"name": "Bob"}]
+
+
+def test_main_write_maps_with_lang(capsys, capture_client, tmp_path):
+    odoo.main(["write", "product.template", "--ids", "[10209]",
+               "--values", '{"name":"中文名"}', "--lang", "zh_TW"]
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert method == "write"
+    assert args == [[10209], {"name": "中文名"}]
+    assert kwargs["context"] == {"lang": "zh_TW"}
+
+
+def test_main_unlink_maps(capsys, capture_client, tmp_path):
+    odoo.main(["unlink", "res.partner", "--ids", "[5]"]
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert method == "unlink"
+    assert args == [[5]]
