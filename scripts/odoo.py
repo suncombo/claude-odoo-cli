@@ -162,3 +162,69 @@ def classify_error(exc, url):
     if isinstance(exc, OSError):
         return {"error": f"Cannot connect to Odoo at {url}: {exc}"}, EXIT_CONN
     return {"error": f"Error: {exc}"}, EXIT_ODOO
+
+
+import sys
+
+DEFAULT_MAX_INLINE_BYTES = 16384  # ~16 KB
+DEFAULT_MAX_INLINE_RECORDS = 50
+_spill_seq = 0
+
+
+def _spill_dir():
+    base = os.environ.get("TMPDIR", "/tmp")
+    d = Path(base) / "odoo-cli"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _next_seq():
+    global _spill_seq
+    _spill_seq += 1
+    return _spill_seq
+
+
+def emit_result(
+    result,
+    *,
+    model="result",
+    out=None,
+    inline=False,
+    max_inline_bytes=DEFAULT_MAX_INLINE_BYTES,
+    max_inline_records=DEFAULT_MAX_INLINE_RECORDS,
+    stdout=None,
+):
+    """Print result JSON to stdout, or spill to a file + print a summary.
+
+    Returns the path written to, or None when printed inline. `out` forces a
+    write; `inline` forces stdout; otherwise spills when the payload exceeds
+    `max_inline_bytes` or the record count exceeds `max_inline_records`.
+    """
+    stream = sys.stdout if stdout is None else stdout
+    payload = json.dumps(result, ensure_ascii=False)
+    nbytes = len(payload.encode("utf-8"))
+    count = len(result) if isinstance(result, list) else 1
+    big = nbytes > max_inline_bytes or count > max_inline_records
+
+    write_to_file = out is not None or (big and not inline)
+    if not write_to_file:
+        stream.write(payload + "\n")
+        return None
+
+    if out is not None:
+        path = Path(out)
+        if path.parent != Path(""):
+            path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        path = _spill_dir() / f"{model}-{_next_seq()}.json"
+    path.write_text(payload, encoding="utf-8")
+
+    summary = {"saved_to": str(path), "count": count, "bytes": nbytes}
+    if isinstance(result, list):
+        if result and isinstance(result[0], dict):
+            summary["fields"] = list(result[0].keys())
+        summary["sample"] = result[:2]
+    else:
+        summary["sample"] = result
+    stream.write(json.dumps(summary, ensure_ascii=False) + "\n")
+    return str(path)

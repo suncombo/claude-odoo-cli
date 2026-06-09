@@ -172,3 +172,62 @@ def test_classify_generic_odoo_error():
 def test_classify_oserror_is_connection():
     err, code = odoo.classify_error(OSError("refused"), "http://x")
     assert code == odoo.EXIT_CONN
+
+
+import io
+
+
+def test_emit_small_inline():
+    buf = io.StringIO()
+    path = odoo.emit_result([{"id": 1}], model="res.partner", stdout=buf)
+    assert path is None
+    assert json.loads(buf.getvalue()) == [{"id": 1}]
+
+
+def test_emit_force_out(tmp_path):
+    buf = io.StringIO()
+    out = tmp_path / "o.json"
+    data = [{"id": 1, "name": "Acme"}]
+    path = odoo.emit_result(data, model="m", out=str(out), stdout=buf)
+    assert path == str(out)
+    summary = json.loads(buf.getvalue())
+    assert summary["saved_to"] == str(out)
+    assert summary["count"] == 1
+    assert summary["fields"] == ["id", "name"]
+    assert summary["sample"] == data
+    assert json.loads(out.read_text(encoding="utf-8")) == data
+
+
+def test_emit_auto_spill_when_over_records(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    data = [{"id": i} for i in range(60)]
+    buf = io.StringIO()
+    path = odoo.emit_result(data, model="res.partner", stdout=buf)
+    assert path is not None
+    assert path.startswith(str(tmp_path))
+    summary = json.loads(buf.getvalue())
+    assert summary["count"] == 60
+    assert len(summary["sample"]) == 2
+
+
+def test_emit_auto_spill_when_over_bytes(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    data = [{"id": 1, "blob": "x" * 100}]
+    buf = io.StringIO()
+    path = odoo.emit_result(data, stdout=buf, max_inline_bytes=10)
+    assert path is not None
+
+
+def test_emit_inline_overrides_threshold():
+    data = [{"id": i} for i in range(100)]
+    buf = io.StringIO()
+    path = odoo.emit_result(data, inline=True, stdout=buf)
+    assert path is None
+    assert json.loads(buf.getvalue()) == data
+
+
+def test_emit_non_list_result():
+    buf = io.StringIO()
+    path = odoo.emit_result(42, stdout=buf)
+    assert path is None
+    assert buf.getvalue().strip() == "42"
