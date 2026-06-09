@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """odoo — single-file CLI for Odoo ERP over JSON-RPC (pure stdlib)."""
 
+import argparse
 import json
+import os
+import sys
 import urllib.request
+from pathlib import Path
 
 
 class OdooServerError(Exception):
@@ -85,9 +89,6 @@ def coerce_json(value):
         return value
 
 
-import os
-from pathlib import Path
-
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "odoo-cli" / "config.json"
 
 _CONN_DEFAULTS = {
@@ -164,8 +165,6 @@ def classify_error(exc, url):
     return {"error": f"Error: {exc}"}, EXIT_ODOO
 
 
-import sys
-
 DEFAULT_MAX_INLINE_BYTES = 16384  # ~16 KB
 DEFAULT_MAX_INLINE_RECORDS = 50
 _spill_seq = 0
@@ -228,9 +227,6 @@ def emit_result(
         summary["sample"] = result
     stream.write(json.dumps(summary, ensure_ascii=False) + "\n")
     return str(path)
-
-
-import argparse
 
 
 def _context_kwargs(args):
