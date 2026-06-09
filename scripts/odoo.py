@@ -135,3 +135,30 @@ def resolve_connection(config, profile=None, env=None):
         if env.get(env_key):
             fields[key] = env[env_key]
     return fields
+
+
+EXIT_OK = 0
+EXIT_ODOO = 1
+EXIT_USAGE = 2
+EXIT_CONN = 3
+
+
+def classify_error(exc, url):
+    """Map an exception to ({"error": msg}, exit_code).
+
+    Order matters: ConnectionRefusedError is checked before its OSError base.
+    """
+    if isinstance(exc, ConnectionRefusedError):
+        return {"error": f"Cannot connect to Odoo at {url}"}, EXIT_CONN
+    if isinstance(exc, PermissionError):
+        return {"error": str(exc)}, EXIT_ODOO
+    if isinstance(exc, OdooServerError):
+        msg = str(exc)
+        if "AccessError" in msg or "AccessDenied" in msg:
+            return {"error": f"Access denied: {msg}"}, EXIT_ODOO
+        if "MissingError" in msg or "does not exist" in msg.lower():
+            return {"error": f"Not found: {msg}"}, EXIT_ODOO
+        return {"error": f"Odoo error: {msg}"}, EXIT_ODOO
+    if isinstance(exc, OSError):
+        return {"error": f"Cannot connect to Odoo at {url}: {exc}"}, EXIT_CONN
+    return {"error": f"Error: {exc}"}, EXIT_ODOO

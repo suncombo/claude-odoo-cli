@@ -138,3 +138,37 @@ def test_load_config_reads_json(tmp_path):
     p = tmp_path / "c.json"
     p.write_text(json.dumps(CONFIG), encoding="utf-8")
     assert odoo.load_config(p)["default_profile"] == "dev"
+
+
+def test_classify_connection_refused():
+    err, code = odoo.classify_error(ConnectionRefusedError(), "http://x")
+    assert code == odoo.EXIT_CONN
+    assert "Cannot connect" in err["error"]
+
+
+def test_classify_permission():
+    err, code = odoo.classify_error(PermissionError("Auth failed"), "http://x")
+    assert code == odoo.EXIT_ODOO
+    assert err["error"] == "Auth failed"
+
+
+def test_classify_access_error():
+    err, code = odoo.classify_error(odoo.OdooServerError("AccessError: nope"), "http://x")
+    assert code == odoo.EXIT_ODOO
+    assert err["error"].startswith("Access denied")
+
+
+def test_classify_missing_error():
+    err, code = odoo.classify_error(odoo.OdooServerError("MissingError: gone"), "u")
+    assert err["error"].startswith("Not found")
+
+
+def test_classify_generic_odoo_error():
+    err, code = odoo.classify_error(odoo.OdooServerError("boom"), "u")
+    assert code == odoo.EXIT_ODOO
+    assert err["error"].startswith("Odoo error")
+
+
+def test_classify_oserror_is_connection():
+    err, code = odoo.classify_error(OSError("refused"), "http://x")
+    assert code == odoo.EXIT_CONN
