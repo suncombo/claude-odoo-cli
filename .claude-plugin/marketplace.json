@@ -1,0 +1,11 @@
+{
+  "name": "odoo-local",
+  "owner": { "name": "truney" },
+  "plugins": [
+    {
+      "name": "odoo",
+      "source": "./",
+      "description": "Odoo ERP CLI plugin (CRUD, search, schema, workflow actions)."
+    }
+  ]
+}
