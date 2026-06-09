@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Claude runtime artifacts
+.claude/scheduled_tasks.lock
