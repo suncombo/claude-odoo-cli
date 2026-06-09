@@ -1,0 +1,16 @@
+{
+  "default_profile": "prod",
+  "profiles": {
+    "prod": {
+      "url": "https://odoo.example.com",
+      "db": "prod_db",
+      "user": "admin",
+      "password": "CHANGE_ME_OR_USE_ODOO_PASSWORD_ENV"
+    },
+    "dev": {
+      "url": "http://localhost:8069",
+      "db": "odoo",
+      "user": "admin"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "odoo",
+  "displayName": "Odoo CLI",
+  "description": "Odoo ERP over JSON-RPC — CRUD, search, schema exploration, and workflow actions via a zero-dependency CLI.",
+  "version": "0.1.0",
+  "author": { "name": "truney", "email": "mick@truney.com" },
+  "keywords": ["odoo", "erp", "json-rpc", "cli"]
+}
