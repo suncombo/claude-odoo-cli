@@ -83,3 +83,55 @@ def coerce_json(value):
         return json.loads(value)
     except (json.JSONDecodeError, ValueError):
         return value
+
+
+import os
+from pathlib import Path
+
+DEFAULT_CONFIG_PATH = Path.home() / ".config" / "odoo-cli" / "config.json"
+
+_CONN_DEFAULTS = {
+    "url": "http://localhost:8069",
+    "db": "odoo",
+    "user": "admin",
+    "password": "admin",
+}
+_ENV_KEYS = {
+    "url": "ODOO_URL",
+    "db": "ODOO_DB",
+    "user": "ODOO_USER",
+    "password": "ODOO_PASSWORD",
+}
+
+
+class ConfigError(Exception):
+    """Raised for configuration/usage problems (bad profile, etc.)."""
+
+
+def load_config(path=DEFAULT_CONFIG_PATH):
+    """Return the parsed config file, or {} if it does not exist."""
+    p = Path(path)
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def resolve_connection(config, profile=None, env=None):
+    """Resolve url/db/user/password.
+
+    Profile selection precedence: explicit `profile` -> env ODOO_PROFILE ->
+    config 'default_profile'. Per-field ODOO_* env vars override profile fields.
+    With no config and no profile, returns defaults overridden by env.
+    """
+    env = os.environ if env is None else env
+    name = profile or env.get("ODOO_PROFILE") or config.get("default_profile")
+    fields = dict(_CONN_DEFAULTS)
+    profiles = config.get("profiles", {})
+    if name:
+        if name not in profiles:
+            raise ConfigError(f"Profile '{name}' not found in config")
+        fields.update({k: v for k, v in profiles[name].items() if k in fields})
+    for key, env_key in _ENV_KEYS.items():
+        if env.get(env_key):
+            fields[key] = env[env_key]
+    return fields

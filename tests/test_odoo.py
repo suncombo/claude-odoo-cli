@@ -86,3 +86,55 @@ def test_coerce_json_literal_fallback():
 
 def test_coerce_json_none():
     assert odoo.coerce_json(None) is None
+
+
+CONFIG = {
+    "default_profile": "dev",
+    "profiles": {
+        "dev": {"url": "http://dev", "db": "d", "user": "u", "password": "p"},
+        "prod": {"url": "http://prod", "db": "pd", "user": "pu", "password": "pp"},
+    },
+}
+
+
+def test_resolve_explicit_profile_wins():
+    c = odoo.resolve_connection(CONFIG, profile="prod", env={})
+    assert c["url"] == "http://prod"
+
+
+def test_resolve_env_profile_over_default():
+    c = odoo.resolve_connection(CONFIG, profile=None, env={"ODOO_PROFILE": "prod"})
+    assert c["url"] == "http://prod"
+
+
+def test_resolve_default_profile_fallback():
+    c = odoo.resolve_connection(CONFIG, profile=None, env={})
+    assert c["url"] == "http://dev"
+
+
+def test_resolve_per_field_env_override():
+    c = odoo.resolve_connection(CONFIG, env={"ODOO_PASSWORD": "secret"})
+    assert c["password"] == "secret"
+    assert c["url"] == "http://dev"
+
+
+def test_resolve_no_config_uses_env_and_defaults():
+    c = odoo.resolve_connection({}, env={"ODOO_URL": "http://x"})
+    assert c["url"] == "http://x"
+    assert c["db"] == "odoo"
+    assert c["user"] == "admin"
+
+
+def test_resolve_missing_profile_raises():
+    with pytest.raises(odoo.ConfigError):
+        odoo.resolve_connection({"profiles": {}}, profile="nope", env={})
+
+
+def test_load_config_missing_file_returns_empty(tmp_path):
+    assert odoo.load_config(tmp_path / "nope.json") == {}
+
+
+def test_load_config_reads_json(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps(CONFIG), encoding="utf-8")
+    assert odoo.load_config(p)["default_profile"] == "dev"
