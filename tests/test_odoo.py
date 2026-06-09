@@ -70,3 +70,19 @@ def test_client_raises_on_auth_failure(monkeypatch):
     client = odoo.OdooClient("http://x", "db", "u", "p")
     with pytest.raises(PermissionError):
         client.execute_kw("m", "a")
+
+
+def test_coerce_json_parses_list():
+    assert odoo.coerce_json('[["is_company","=",true]]') == [["is_company", "=", True]]
+
+
+def test_coerce_json_parses_dict():
+    assert odoo.coerce_json('{"name": "X"}') == {"name": "X"}
+
+
+def test_coerce_json_literal_fallback():
+    assert odoo.coerce_json("name asc") == "name asc"
+
+
+def test_coerce_json_none():
+    assert odoo.coerce_json(None) is None

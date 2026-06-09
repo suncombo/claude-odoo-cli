@@ -70,3 +70,16 @@ class OdooClient:
                 kwargs if kwargs is not None else {},
             ],
         )
+
+
+def coerce_json(value):
+    """Parse a CLI flag value as JSON; fall back to the literal string.
+
+    Preserves the old MCP tolerance for arrays passed as strings.
+    """
+    if value is None:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, ValueError):
+        return value
