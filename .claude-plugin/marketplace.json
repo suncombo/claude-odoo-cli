@@ -1,11 +1,13 @@
 {
-  "name": "odoo-local",
-  "owner": { "name": "truney" },
+  "name": "claude-odoo-cli",
+  "owner": { "name": "suncombo", "email": "mick@truney.com" },
+  "description": "Odoo ERP CLI plugin for Claude Code.",
   "plugins": [
     {
       "name": "odoo",
       "source": "./",
-      "description": "Odoo ERP CLI plugin (CRUD, search, schema, workflow actions)."
+      "description": "Odoo ERP over JSON-RPC — CRUD, search, schema, and workflow actions via a zero-dependency CLI.",
+      "version": "0.1.0"
     }
   ]
 }

@@ -20,10 +20,18 @@ python3 scripts/odoo.py config list
 
 ## Install into Claude Code
 
-Quick (dev): `claude --plugin-dir /Users/truney/projects/odoo-cli`
-Persistent: `claude plugin marketplace add /Users/truney/projects/odoo-cli`, then install
-the `odoo` plugin from the `odoo-local` marketplace. Invoke via the `odoo` skill or
-`/odoo:odoo <args>`.
+From GitHub (anyone):
+
+```bash
+claude plugin marketplace add suncombo/claude-odoo-cli
+claude plugin install odoo@claude-odoo-cli
+```
+
+Then invoke via the `odoo` skill (Claude runs the CLI for you) or the `/odoo:odoo <args>`
+slash command. After installing, create your config (see **Configure** above).
+
+Local development: `claude --plugin-dir /path/to/claude-odoo-cli`, then `/reload-plugins`
+after edits.
 
 ## Test
 
