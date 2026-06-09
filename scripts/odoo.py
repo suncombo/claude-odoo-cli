@@ -1,2 +1,72 @@
 #!/usr/bin/env python3
 """odoo — single-file CLI for Odoo ERP over JSON-RPC (pure stdlib)."""
+
+import json
+import urllib.request
+
+
+class OdooServerError(Exception):
+    """Raised when Odoo returns a JSON-RPC error response."""
+
+
+class OdooClient:
+    """Wraps Odoo's /jsonrpc endpoint with lazy auth and uid caching."""
+
+    def __init__(self, url, db, username, password):
+        self.url = url.rstrip("/")
+        self.db = db
+        self.username = username
+        self.password = password
+        self._uid = None
+        self._request_id = 0
+
+    def _jsonrpc(self, service, method, args):
+        self._request_id += 1
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "call",
+            "params": {"service": service, "method": method, "args": args},
+            "id": self._request_id,
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.url}/jsonrpc",
+            data=data,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if result.get("error"):
+            err = result["error"]
+            message = err.get("data", {}).get("message") or err.get("message", str(err))
+            raise OdooServerError(message)
+        return result.get("result")
+
+    def _authenticate(self):
+        if self._uid is not None:
+            return self._uid
+        uid = self._jsonrpc(
+            "common", "authenticate", [self.db, self.username, self.password, {}]
+        )
+        if not uid:
+            raise PermissionError(
+                f"Authentication failed for user '{self.username}' on database '{self.db}'"
+            )
+        self._uid = uid
+        return uid
+
+    def execute_kw(self, model, method, args=None, kwargs=None):
+        uid = self._authenticate()
+        return self._jsonrpc(
+            "object",
+            "execute_kw",
+            [
+                self.db,
+                uid,
+                self.password,
+                model,
+                method,
+                args if args is not None else [],
+                kwargs if kwargs is not None else {},
+            ],
+        )
