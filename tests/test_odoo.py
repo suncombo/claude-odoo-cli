@@ -231,3 +231,85 @@ def test_emit_non_list_result():
     path = odoo.emit_result(42, stdout=buf)
     assert path is None
     assert buf.getvalue().strip() == "42"
+
+
+class FakeClient:
+    def __init__(self, **kw):
+        self.kw = kw
+        self.calls = []
+        self.result = [{"id": 1, "name": "Acme"}]
+
+    def execute_kw(self, model, method, args=None, kwargs=None):
+        self.calls.append((model, method, args, kwargs))
+        return self.result
+
+
+@pytest.fixture
+def capture_client(monkeypatch):
+    holder = {}
+
+    def factory(**kw):
+        c = FakeClient(**kw)
+        holder["client"] = c
+        return c
+
+    holder["factory"] = factory
+    return holder
+
+
+def _no_config(tmp_path):
+    return ["--config", str(tmp_path / "none.json")]
+
+
+def test_main_search_read_maps(capsys, capture_client, tmp_path):
+    rc = odoo.main(
+        ["search-read", "res.partner",
+         "--domain", '[["is_company","=",true]]',
+         "--fields", '["name"]', "--limit", "5"] + _no_config(tmp_path),
+        client_factory=capture_client["factory"],
+    )
+    assert rc == odoo.EXIT_OK
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert model == "res.partner"
+    assert method == "search_read"
+    assert args == [[["is_company", "=", True]]]
+    assert kwargs["fields"] == ["name"]
+    assert kwargs["limit"] == 5
+    assert kwargs["offset"] == 0
+
+
+def test_main_search_read_default_domain(capsys, capture_client, tmp_path):
+    odoo.main(["search-read", "res.partner"] + _no_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, args, _ = capture_client["client"].calls[0]
+    assert args == [[]]
+
+
+def test_main_search_read_lang_context(capsys, capture_client, tmp_path):
+    odoo.main(["search-read", "product.template", "--lang", "zh_TW"] + _no_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"lang": "zh_TW"}
+
+
+def test_main_bad_profile_returns_usage(capsys, capture_client, tmp_path):
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps({"profiles": {}}), encoding="utf-8")
+    rc = odoo.main(["search-read", "res.partner", "--profile", "nope",
+                    "--config", str(cfg)],
+                   client_factory=capture_client["factory"])
+    assert rc == odoo.EXIT_USAGE
+    assert "not found" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_main_odoo_error_returns_code(capsys, tmp_path):
+    def boom_factory(**kw):
+        class C:
+            def execute_kw(self, *a, **k):
+                raise odoo.OdooServerError("AccessError: denied")
+        return C()
+
+    rc = odoo.main(["search-read", "res.partner"] + _no_config(tmp_path),
+                   client_factory=boom_factory)
+    assert rc == odoo.EXIT_ODOO
+    assert json.loads(capsys.readouterr().out)["error"].startswith("Access denied")

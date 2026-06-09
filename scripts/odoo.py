@@ -228,3 +228,88 @@ def emit_result(
         summary["sample"] = result
     stream.write(json.dumps(summary, ensure_ascii=False) + "\n")
     return str(path)
+
+
+import argparse
+
+
+def _context_kwargs(args):
+    """Return {'context': {'lang': ...}} if --lang was given, else {}."""
+    lang = getattr(args, "lang", None)
+    if lang:
+        return {"context": {"lang": lang}}
+    return {}
+
+
+def cmd_search_read(client, args):
+    kwargs = {"limit": args.limit, "offset": args.offset}
+    fields = coerce_json(args.fields)
+    if fields is not None:
+        kwargs["fields"] = fields
+    if args.order:
+        kwargs["order"] = args.order
+    kwargs.update(_context_kwargs(args))
+    domain = coerce_json(args.domain) or []
+    return client.execute_kw(args.model, "search_read", [domain], kwargs)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog="odoo", description="Odoo ERP CLI over JSON-RPC")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    conn = argparse.ArgumentParser(add_help=False)
+    conn.add_argument("--profile")
+    conn.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
+
+    out = argparse.ArgumentParser(add_help=False)
+    out.add_argument("--out")
+    out.add_argument("--inline", action="store_true")
+    out.add_argument("--lang")
+    out.add_argument(
+        "--max-inline-bytes", type=int, dest="max_inline_bytes",
+        default=DEFAULT_MAX_INLINE_BYTES,
+    )
+
+    sr = sub.add_parser("search-read", parents=[conn, out])
+    sr.add_argument("model")
+    sr.add_argument("--domain")
+    sr.add_argument("--fields")
+    sr.add_argument("--limit", type=int, default=80)
+    sr.add_argument("--offset", type=int, default=0)
+    sr.add_argument("--order")
+    sr.set_defaults(func=cmd_search_read)
+
+    return parser
+
+
+def main(argv=None, *, client_factory=OdooClient):
+    args = build_parser().parse_args(argv)
+    config = load_config(getattr(args, "config", None) or DEFAULT_CONFIG_PATH)
+    try:
+        conn = resolve_connection(config, profile=getattr(args, "profile", None))
+    except ConfigError as e:
+        sys.stdout.write(json.dumps({"error": str(e)}) + "\n")
+        return EXIT_USAGE
+    client = client_factory(
+        url=conn["url"], db=conn["db"], username=conn["user"], password=conn["password"]
+    )
+    try:
+        result = args.func(client, args)
+    except Exception as e:  # noqa: BLE001 - classified below
+        err, code = classify_error(e, conn["url"])
+        sys.stdout.write(json.dumps(err, ensure_ascii=False) + "\n")
+        return code
+    if result is None:
+        result = True
+    emit_result(
+        result,
+        model=str(getattr(args, "model", args.command)),
+        out=getattr(args, "out", None),
+        inline=getattr(args, "inline", False),
+        max_inline_bytes=getattr(args, "max_inline_bytes", DEFAULT_MAX_INLINE_BYTES),
+    )
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())
