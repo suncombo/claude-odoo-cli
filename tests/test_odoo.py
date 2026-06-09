@@ -393,3 +393,30 @@ def test_main_execute_method_kwargs(capsys, capture_client, tmp_path):
     _, _, args, kwargs = capture_client["client"].calls[0]
     assert args == [[10]]
     assert kwargs["default"] == {"name": "X"}
+
+
+def test_config_list_masks_password(capsys, tmp_path):
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps(CONFIG), encoding="utf-8")
+    rc = odoo.main(["config", "list", "--config", str(cfg)])
+    assert rc == odoo.EXIT_OK
+    out = json.loads(capsys.readouterr().out)
+    assert out["default_profile"] == "dev"
+    assert out["profiles"]["dev"]["password"] == "***"
+    assert out["profiles"]["dev"]["url"] == "http://dev"
+
+
+def test_config_use_sets_default(capsys, tmp_path):
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps(CONFIG), encoding="utf-8")
+    rc = odoo.main(["config", "use", "prod", "--config", str(cfg)])
+    assert rc == odoo.EXIT_OK
+    assert json.loads(cfg.read_text(encoding="utf-8"))["default_profile"] == "prod"
+
+
+def test_config_use_unknown_profile(capsys, tmp_path):
+    cfg = tmp_path / "c.json"
+    cfg.write_text(json.dumps(CONFIG), encoding="utf-8")
+    rc = odoo.main(["config", "use", "ghost", "--config", str(cfg)])
+    assert rc == odoo.EXIT_USAGE
+    assert "not found" in json.loads(capsys.readouterr().out)["error"]

@@ -306,6 +306,35 @@ def cmd_execute_method(client, args):
     )
 
 
+def cmd_config(args):
+    """Handle `config list` / `config use <name>`. Returns an exit code."""
+    path = Path(args.config)
+    config = load_config(path)
+    if args.action == "list":
+        masked = {}
+        for name, prof in config.get("profiles", {}).items():
+            masked[name] = {k: v for k, v in prof.items() if k != "password"}
+            masked[name]["password"] = "***" if prof.get("password") else None
+        sys.stdout.write(
+            json.dumps(
+                {"default_profile": config.get("default_profile"), "profiles": masked},
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n"
+        )
+        return EXIT_OK
+    # action == "use"
+    if args.name not in config.get("profiles", {}):
+        sys.stdout.write(json.dumps({"error": f"Profile '{args.name}' not found"}) + "\n")
+        return EXIT_USAGE
+    config["default_profile"] = args.name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    sys.stdout.write(json.dumps({"default_profile": args.name}) + "\n")
+    return EXIT_OK
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="odoo", description="Odoo ERP CLI over JSON-RPC")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -370,11 +399,19 @@ def build_parser():
     em.add_argument("--kwargs")
     em.set_defaults(func=cmd_execute_method)
 
+    cfg = sub.add_parser("config")
+    cfg.add_argument("action", choices=["list", "use"])
+    cfg.add_argument("name", nargs="?")
+    cfg.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
+    cfg.set_defaults(func=None)
+
     return parser
 
 
 def main(argv=None, *, client_factory=OdooClient):
     args = build_parser().parse_args(argv)
+    if args.command == "config":
+        return cmd_config(args)
     config = load_config(getattr(args, "config", None) or DEFAULT_CONFIG_PATH)
     try:
         conn = resolve_connection(config, profile=getattr(args, "profile", None))
