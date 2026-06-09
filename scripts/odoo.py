@@ -280,6 +280,32 @@ def cmd_unlink(client, args):
     return client.execute_kw(args.model, "unlink", [coerce_json(args.ids)])
 
 
+def cmd_list_models(client, args):
+    domain = []
+    if args.search:
+        domain = ["|", ["model", "ilike", args.search], ["name", "ilike", args.search]]
+    return client.execute_kw(
+        "ir.model", "search_read", [domain],
+        {"fields": ["name", "model"], "order": "model asc"},
+    )
+
+
+def cmd_list_fields(client, args):
+    kwargs = {}
+    attributes = coerce_json(args.attributes)
+    if attributes is not None:
+        kwargs["attributes"] = attributes
+    return client.execute_kw(args.model, "fields_get", [], kwargs)
+
+
+def cmd_execute_method(client, args):
+    kwargs = coerce_json(args.kwargs) or {}
+    kwargs.update(_context_kwargs(args))
+    return client.execute_kw(
+        args.model, args.method, coerce_json(args.args), kwargs or None
+    )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="odoo", description="Odoo ERP CLI over JSON-RPC")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -327,6 +353,22 @@ def build_parser():
     ul.add_argument("model")
     ul.add_argument("--ids", required=True)
     ul.set_defaults(func=cmd_unlink)
+
+    lm = sub.add_parser("list-models", parents=[conn, out])
+    lm.add_argument("--search")
+    lm.set_defaults(func=cmd_list_models)
+
+    lf = sub.add_parser("list-fields", parents=[conn, out])
+    lf.add_argument("model")
+    lf.add_argument("--attributes")
+    lf.set_defaults(func=cmd_list_fields)
+
+    em = sub.add_parser("execute-method", parents=[conn, out])
+    em.add_argument("model")
+    em.add_argument("method")
+    em.add_argument("--args")
+    em.add_argument("--kwargs")
+    em.set_defaults(func=cmd_execute_method)
 
     return parser
 

@@ -348,3 +348,48 @@ def test_main_unlink_maps(capsys, capture_client, tmp_path):
     model, method, args, kwargs = capture_client["client"].calls[0]
     assert method == "unlink"
     assert args == [[5]]
+
+
+def test_main_list_models_no_search(capsys, capture_client, tmp_path):
+    odoo.main(["list-models"] + _no_config(tmp_path),
+              client_factory=capture_client["factory"])
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert model == "ir.model"
+    assert method == "search_read"
+    assert args == [[]]
+    assert kwargs["fields"] == ["name", "model"]
+
+
+def test_main_list_models_search(capsys, capture_client, tmp_path):
+    odoo.main(["list-models", "--search", "partner"] + _no_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, args, _ = capture_client["client"].calls[0]
+    assert args == [["|", ["model", "ilike", "partner"], ["name", "ilike", "partner"]]]
+
+
+def test_main_list_fields(capsys, capture_client, tmp_path):
+    odoo.main(["list-fields", "res.partner", "--attributes", '["type","string"]']
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert model == "res.partner"
+    assert method == "fields_get"
+    assert args == []
+    assert kwargs["attributes"] == ["type", "string"]
+
+
+def test_main_execute_method(capsys, capture_client, tmp_path):
+    odoo.main(["execute-method", "sale.order", "action_confirm", "--args", "[[5]]"]
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    model, method, args, kwargs = capture_client["client"].calls[0]
+    assert model == "sale.order"
+    assert method == "action_confirm"
+    assert args == [[5]]
+
+
+def test_main_execute_method_kwargs(capsys, capture_client, tmp_path):
+    odoo.main(["execute-method", "res.partner", "copy", "--args", "[[10]]",
+               "--kwargs", '{"default":{"name":"X"}}'] + _no_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, args, kwargs = capture_client["client"].calls[0]
+    assert args == [[10]]
+    assert kwargs["default"] == {"name": "X"}
