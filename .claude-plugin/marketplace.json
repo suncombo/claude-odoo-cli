@@ -7,7 +7,7 @@
       "name": "odoo",
       "source": "./",
       "description": "Odoo ERP over JSON-RPC — CRUD, search, schema, and workflow actions via a zero-dependency CLI.",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

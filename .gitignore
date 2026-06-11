@@ -5,3 +5,6 @@ __pycache__/
 
 # Claude runtime artifacts
 .claude/scheduled_tasks.lock
+
+# uv lockfile (CLI has no dependencies)
+uv.lock
