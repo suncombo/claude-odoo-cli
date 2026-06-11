@@ -12,7 +12,7 @@ Decide how to handle it:
    `list-fields`, `execute-method`, `config`), run it verbatim and show the result:
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/odoo.py" $ARGUMENTS
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/odoo/scripts/odoo.py" $ARGUMENTS
    ```
 
 2. **Natural language** — otherwise, treat `$ARGUMENTS` as a request (e.g.

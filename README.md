@@ -1,8 +1,9 @@
 # odoo-cli
 
-Claude Code plugin for Odoo ERP over JSON-RPC. Bundles a zero-dependency Python CLI
-(`scripts/odoo.py`), an `odoo` skill, and an `/odoo:odoo` slash command. Replaces the
-older `suncombo-odoo-mcp` MCP server.
+Agent skill + zero-dependency Python CLI for Odoo ERP over JSON-RPC. The skill bundles its
+own CLI at `skills/odoo/scripts/odoo.py`, so it works in any agent that supports the open
+Agent Skills format. Also ships as a Claude Code plugin with an `/odoo:odoo` slash command.
+Replaces the older `suncombo-odoo-mcp` MCP server.
 
 ## Configure
 
@@ -13,22 +14,35 @@ Passwords can be omitted from the file and supplied via `ODOO_PASSWORD` (per-fie
 ## Use from the shell
 
 ```bash
-python3 scripts/odoo.py search-read res.partner --fields '["name","email"]' --limit 5
-python3 scripts/odoo.py --help
-python3 scripts/odoo.py config list
+python3 skills/odoo/scripts/odoo.py search-read res.partner --fields '["name","email"]' --limit 5
+python3 skills/odoo/scripts/odoo.py --help
+python3 skills/odoo/scripts/odoo.py config list
 ```
 
-## Install into Claude Code
+## Install the skill (any agent)
 
-From GitHub (anyone):
+Works with Claude Code, Codex, OpenCode, Cursor, and 70+ agents via the open
+[skills.sh](https://skills.sh) installer:
+
+```bash
+# Install globally for all your projects
+npx skills add suncombo/claude-odoo-cli -g
+
+# Or install into a specific agent
+npx skills add suncombo/claude-odoo-cli -a claude-code -a codex
+```
+
+This drops the self-contained `odoo` skill (CLI included) into each agent's skills directory.
+
+## Install as a Claude Code plugin
 
 ```bash
 claude plugin marketplace add suncombo/claude-odoo-cli
 claude plugin install odoo@claude-odoo-cli
 ```
 
-Then invoke via the `odoo` skill (Claude runs the CLI for you) or the `/odoo:odoo <args>`
-slash command. After installing, create your config (see **Configure** above).
+Then invoke via the `odoo` skill (the agent runs the CLI for you) or the `/odoo:odoo <args>`
+slash command. After installing either way, create your config (see **Configure** above).
 
 Local development: `claude --plugin-dir /path/to/claude-odoo-cli`, then `/reload-plugins`
 after edits.

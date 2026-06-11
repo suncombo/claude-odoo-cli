@@ -2,19 +2,31 @@
 name: odoo
 description: Use for any Odoo ERP operation over JSON-RPC — search/read/create/write/delete records, explore models and fields, run workflow actions (e.g. confirm a sale order), or translate fields. Invokes the bundled zero-dependency CLI via Bash.
 allowed-tools: Bash(python3 *)
+metadata:
+  author: truney
+  version: "0.2.0"
 ---
 
 # Odoo ERP CLI
 
-Run Odoo operations through the bundled CLI. Always invoke it as:
+This skill bundles a zero-dependency Python CLI at **`scripts/odoo.py` inside this skill's
+own directory**. Run it with `python3`, pointing at wherever this skill is installed:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/odoo.py" <subcommand> [options]
+python3 <skill-dir>/scripts/odoo.py <subcommand> [options]
 ```
 
-Select the instance with `--profile <name>` (defaults to the config's
-`default_profile`). Connection comes from `~/.config/odoo-cli/config.json`;
-`ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD` override individual fields.
+Resolve `<skill-dir>` by how the skill was installed:
+
+- **Installed skill (skills.sh / most agents):** the directory holding this `SKILL.md`,
+  e.g. `~/.claude/skills/odoo/`, `~/.codex/skills/odoo/`, `~/.config/opencode/skills/odoo/`,
+  or a project-local `./.<agent>/skills/odoo/`. → `python3 ~/.claude/skills/odoo/scripts/odoo.py …`
+- **Claude Code plugin:** `python3 "${CLAUDE_PLUGIN_ROOT}/skills/odoo/scripts/odoo.py" …`
+
+Below, `odoo.py` is shorthand for that full path. Select the Odoo instance with
+`--profile <name>` (defaults to the config's `default_profile`). Connection comes from
+`~/.config/odoo-cli/config.json`; `ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD` override
+individual fields.
 
 ## Subcommands
 
@@ -52,15 +64,15 @@ Prefix logic operators: `"&"` (AND, default), `"|"` (OR), `"!"` (NOT).
 
 ```bash
 # Translate a product name to Traditional Chinese
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/odoo.py" write product.template \
+python3 <skill-dir>/scripts/odoo.py write product.template \
   --ids '[10209]' --values '{"name":"中文名"}' --lang zh_TW
 
 # Copy a record with overrides
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/odoo.py" execute-method product.template \
+python3 <skill-dir>/scripts/odoo.py execute-method product.template \
   copy --args '[[10209]]' --kwargs '{"default":{"name":"New"}}'
 
 # Confirm a sale order
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/odoo.py" execute-method sale.order \
+python3 <skill-dir>/scripts/odoo.py execute-method sale.order \
   action_confirm --args '[[5]]'
 ```
 
