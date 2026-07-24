@@ -32,7 +32,7 @@ individual fields.
 
 | Subcommand | Purpose |
 |---|---|
-| `search-read <model> [--domain JSON] [--fields JSON] [--limit N] [--offset N] [--order STR]` | Search + read records. **Always pass `--fields`** to keep payloads small. |
+| `search-read <model> [--domain JSON] [--fields JSON] [--limit N] [--offset N] [--order STR]` | Search + read records. **Always pass `--fields`** to keep payloads small. Returns **all** matching rows unless `--limit` is given — see below. |
 | `read <model> --ids JSON [--fields JSON]` | Read records by id. |
 | `create <model> --values JSON` | Create one record. Returns the new id. |
 | `write <model> --ids JSON --values JSON` | Update records. |
@@ -44,6 +44,23 @@ individual fields.
 
 Common flags on data commands: `--profile`, `--out PATH`, `--inline`,
 `--lang CODE`, `--max-inline-bytes N`.
+
+### `search-read` row limits
+
+`--limit` is **not** set by default: `search-read` returns every matching row,
+so counting and inventory queries are correct without extra flags. Large
+results spill to a file automatically, so this does not flood the context.
+
+A 10,000-row safety cap protects the Odoo worker. Filling it is an **error**
+(exit 2), never a short result:
+
+```
+{"error": "sale.order.line: filled the 10000-row safety cap, so this result is
+incomplete. Narrow --domain, or pass --limit explicitly to accept a truncated slice."}
+```
+
+Pass `--limit N` when you deliberately want the first N rows — an explicit
+limit is never treated as an error, even when completely filled.
 
 ## Domain syntax
 

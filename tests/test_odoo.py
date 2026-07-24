@@ -285,6 +285,42 @@ def test_main_search_read_default_domain(capsys, capture_client, tmp_path):
     assert args == [[]]
 
 
+def _client_returning(capture_client, rows):
+    def factory(**kw):
+        c = FakeClient(**kw)
+        c.result = rows
+        capture_client["client"] = c
+        return c
+    return factory
+
+
+def test_main_search_read_without_limit_asks_for_everything(capsys, capture_client, tmp_path):
+    """Omitting --limit must not silently page at some UI-sized default."""
+    odoo.main(["search-read", "res.partner"] + _no_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["limit"] == odoo.SEARCH_READ_SAFETY_CAP
+
+
+def test_main_search_read_errors_when_safety_cap_filled(capsys, capture_client, tmp_path):
+    """A full cap means the answer is incomplete — fail loudly, never truncate silently."""
+    rows = [{"id": i} for i in range(odoo.SEARCH_READ_SAFETY_CAP)]
+    rc = odoo.main(["search-read", "res.partner"] + _no_config(tmp_path),
+                   client_factory=_client_returning(capture_client, rows))
+    assert rc == odoo.EXIT_USAGE
+    assert "safety cap" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_main_search_read_explicit_limit_may_truncate(capsys, capture_client, tmp_path):
+    """An explicit --limit is a deliberate slice, so filling it is not an error."""
+    rows = [{"id": i} for i in range(5)]
+    rc = odoo.main(["search-read", "res.partner", "--limit", "5"] + _no_config(tmp_path),
+                   client_factory=_client_returning(capture_client, rows))
+    assert rc == odoo.EXIT_OK
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["limit"] == 5
+
+
 def test_main_search_read_lang_context(capsys, capture_client, tmp_path):
     odoo.main(["search-read", "product.template", "--lang", "zh_TW"] + _no_config(tmp_path),
               client_factory=capture_client["factory"])

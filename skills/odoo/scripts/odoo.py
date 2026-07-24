@@ -143,12 +143,27 @@ EXIT_ODOO = 1
 EXIT_USAGE = 2
 EXIT_CONN = 3
 
+# `search-read` without --limit means "every matching row" — Odoo's own
+# search_read semantics, and what `list-models` already does here. The cap only
+# exists so a runaway query cannot build a multi-million-row list inside a
+# production worker; filling it is reported as an error, never as a short
+# result, because a silently truncated slice reads as a complete answer and
+# yields confidently wrong counts.
+# ponytail: one constant, no --max-rows flag; pass --limit N to go past it.
+SEARCH_READ_SAFETY_CAP = 10000
+
+
+class SafetyCapExceeded(Exception):
+    """Raised when a search-read with no explicit --limit fills the safety cap."""
+
 
 def classify_error(exc, url):
     """Map an exception to ({"error": msg}, exit_code).
 
     Order matters: ConnectionRefusedError is checked before its OSError base.
     """
+    if isinstance(exc, SafetyCapExceeded):
+        return {"error": str(exc)}, EXIT_USAGE
     if isinstance(exc, ConnectionRefusedError):
         return {"error": f"Cannot connect to Odoo at {url}"}, EXIT_CONN
     if isinstance(exc, PermissionError):
@@ -238,7 +253,12 @@ def _context_kwargs(args):
 
 
 def cmd_search_read(client, args):
-    kwargs = {"limit": args.limit, "offset": args.offset}
+    # No --limit means "all rows"; the cap is a backstop, not a page size.
+    explicit_limit = args.limit is not None
+    kwargs = {
+        "limit": args.limit if explicit_limit else SEARCH_READ_SAFETY_CAP,
+        "offset": args.offset,
+    }
     fields = coerce_json(args.fields)
     if fields is not None:
         kwargs["fields"] = fields
@@ -246,7 +266,14 @@ def cmd_search_read(client, args):
         kwargs["order"] = args.order
     kwargs.update(_context_kwargs(args))
     domain = coerce_json(args.domain) or []
-    return client.execute_kw(args.model, "search_read", [domain], kwargs)
+    result = client.execute_kw(args.model, "search_read", [domain], kwargs)
+    if not explicit_limit and len(result) >= SEARCH_READ_SAFETY_CAP:
+        raise SafetyCapExceeded(
+            f"{args.model}: filled the {SEARCH_READ_SAFETY_CAP}-row safety cap, so "
+            "this result is incomplete. Narrow --domain, or pass --limit "
+            "explicitly to accept a truncated slice."
+        )
+    return result
 
 
 def cmd_read(client, args):
@@ -352,7 +379,7 @@ def build_parser():
     sr.add_argument("model")
     sr.add_argument("--domain")
     sr.add_argument("--fields")
-    sr.add_argument("--limit", type=int, default=80)
+    sr.add_argument("--limit", type=int, default=None)
     sr.add_argument("--offset", type=int, default=0)
     sr.add_argument("--order")
     sr.set_defaults(func=cmd_search_read)
