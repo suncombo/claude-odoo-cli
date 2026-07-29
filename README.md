@@ -11,6 +11,12 @@ Copy `config.example.json` to `~/.config/odoo-cli/config.json` and edit profiles
 Passwords can be omitted from the file and supplied via `ODOO_PASSWORD` (per-field
 `ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD` override the selected profile).
 
+Mark a profile `"readonly": true` when the instance behind it must never be written
+to — a frozen legacy system, or a production database you only report on. `create`,
+`write` and `unlink` are then refused with exit 2 before the CLI authenticates, and
+`execute-method` is limited to `read_group`, `search_count`, `fields_get` and
+`name_search`.
+
 ## Use from the shell
 
 ```bash

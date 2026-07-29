@@ -4,7 +4,7 @@ description: Use for any Odoo ERP operation over JSON-RPC — search/read/create
 allowed-tools: Bash(python3 *)
 metadata:
   author: truney
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Odoo ERP CLI
@@ -61,6 +61,25 @@ incomplete. Narrow --domain, or pass --limit explicitly to accept a truncated sl
 
 Pass `--limit N` when you deliberately want the first N rows — an explicit
 limit is never treated as an error, even when completely filled.
+
+## Read-only profiles
+
+A profile carrying `"readonly": true` refuses anything that could modify data.
+`create`, `write`, `unlink` and any unrecognised subcommand are rejected before the
+CLI even authenticates:
+
+```
+{"error": "read-only profile: 'write' can modify data"}   # exit 2
+```
+
+`execute-method` is judged by method name, since it can reach anything the ORM
+exposes. Only `read_group`, `search_count`, `fields_get` and `name_search` pass —
+the read paths the other subcommands cannot cover, notably counting and aggregating
+past `search-read`'s row cap.
+
+Use it for an instance that must never be written to: a frozen legacy system, or a
+production database you only report on. The flag lives on the profile rather than
+the invocation, so it protects the target no matter who calls or how.
 
 ## Domain syntax
 

@@ -11,6 +11,12 @@
       "url": "http://localhost:8069",
       "db": "odoo",
       "user": "admin"
+    },
+    "legacy": {
+      "url": "https://old.example.com",
+      "db": "old_db",
+      "user": "admin",
+      "readonly": true
     }
   }
 }

@@ -2,7 +2,7 @@
   "name": "odoo",
   "displayName": "Odoo CLI",
   "description": "Odoo ERP over JSON-RPC — CRUD, search, schema exploration, and workflow actions via a zero-dependency CLI.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": { "name": "truney", "email": "mick@truney.com" },
   "homepage": "https://github.com/suncombo/claude-odoo-cli",
   "repository": "https://github.com/suncombo/claude-odoo-cli",

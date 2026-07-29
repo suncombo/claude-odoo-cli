@@ -96,6 +96,11 @@ _CONN_DEFAULTS = {
     "db": "odoo",
     "user": "admin",
     "password": "admin",
+    # Set `"readonly": true` on a profile pointing at an instance that must never be
+    # written to — a frozen legacy system, a production database you only report on.
+    # It belongs to the profile rather than to the invocation because the property
+    # being protected is the target, and a caller who has to opt in can forget to.
+    "readonly": False,
 }
 _ENV_KEYS = {
     "url": "ODOO_URL",
@@ -136,6 +141,35 @@ def resolve_connection(config, profile=None, env=None):
         if env.get(env_key):
             fields[key] = env[env_key]
     return fields
+
+
+# `execute-method` can reach anything the ORM exposes, so a read-only profile has to
+# judge it by method name. These are the read paths the dedicated subcommands cannot
+# cover: counting and aggregating past the search-read row cap, plus introspection.
+# Blanket-refusing execute-method instead would push people around the guard entirely,
+# and a guard that gets worked around protects nothing.
+READONLY_METHODS = frozenset({"read_group", "search_count", "fields_get", "name_search"})
+
+
+def refuse_write(args, conn):
+    """Return a refusal message if a read-only profile is asked to mutate, else None.
+
+    Reads are opt-in (`reads=True` on the subparser) so an unrecognised command is
+    refused rather than allowed — a subcommand added later fails closed by default.
+    """
+    if not conn.get("readonly"):
+        return None
+    if args.command == "execute-method":
+        if args.method in READONLY_METHODS:
+            return None
+        allowed = ", ".join(sorted(READONLY_METHODS))
+        return (
+            f"read-only profile: execute-method '{args.method}' is not one of the "
+            f"read-only methods ({allowed})"
+        )
+    if getattr(args, "reads", False):
+        return None
+    return f"read-only profile: '{args.command}' can modify data"
 
 
 EXIT_OK = 0
@@ -382,13 +416,13 @@ def build_parser():
     sr.add_argument("--limit", type=int, default=None)
     sr.add_argument("--offset", type=int, default=0)
     sr.add_argument("--order")
-    sr.set_defaults(func=cmd_search_read)
+    sr.set_defaults(func=cmd_search_read, reads=True)
 
     rd = sub.add_parser("read", parents=[conn, out])
     rd.add_argument("model")
     rd.add_argument("--ids", required=True)
     rd.add_argument("--fields")
-    rd.set_defaults(func=cmd_read)
+    rd.set_defaults(func=cmd_read, reads=True)
 
     cr = sub.add_parser("create", parents=[conn, out])
     cr.add_argument("model")
@@ -408,12 +442,12 @@ def build_parser():
 
     lm = sub.add_parser("list-models", parents=[conn, out])
     lm.add_argument("--search")
-    lm.set_defaults(func=cmd_list_models)
+    lm.set_defaults(func=cmd_list_models, reads=True)
 
     lf = sub.add_parser("list-fields", parents=[conn, out])
     lf.add_argument("model")
     lf.add_argument("--attributes")
-    lf.set_defaults(func=cmd_list_fields)
+    lf.set_defaults(func=cmd_list_fields, reads=True)
 
     em = sub.add_parser("execute-method", parents=[conn, out])
     em.add_argument("model")
@@ -440,6 +474,10 @@ def main(argv=None, *, client_factory=OdooClient):
         conn = resolve_connection(config, profile=getattr(args, "profile", None))
     except ConfigError as e:
         sys.stdout.write(json.dumps({"error": str(e)}) + "\n")
+        return EXIT_USAGE
+    refusal = refuse_write(args, conn)
+    if refusal:
+        sys.stdout.write(json.dumps({"error": refusal}) + "\n")
         return EXIT_USAGE
     client = client_factory(
         url=conn["url"], db=conn["db"], username=conn["user"], password=conn["password"]

@@ -456,3 +456,93 @@ def test_config_use_unknown_profile(capsys, tmp_path):
     rc = odoo.main(["config", "use", "ghost", "--config", str(cfg)])
     assert rc == odoo.EXIT_USAGE
     assert "not found" in json.loads(capsys.readouterr().out)["error"]
+
+
+RO_CONFIG = {
+    "default_profile": "legacy",
+    "profiles": {
+        "legacy": {
+            "url": "http://legacy", "db": "l", "user": "u", "password": "p",
+            "readonly": True,
+        },
+        "live": {"url": "http://live", "db": "v", "user": "u", "password": "p"},
+    },
+}
+
+
+def _ro_config(tmp_path):
+    cfg = tmp_path / "ro.json"
+    cfg.write_text(json.dumps(RO_CONFIG), encoding="utf-8")
+    return ["--config", str(cfg)]
+
+
+def test_readonly_defaults_off_and_comes_from_profile():
+    assert odoo.resolve_connection(RO_CONFIG, profile="live", env={})["readonly"] is False
+    assert odoo.resolve_connection(RO_CONFIG, profile="legacy", env={})["readonly"] is True
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["create", "res.partner", "--values", '{"name":"X"}'],
+        ["write", "res.partner", "--ids", "[1]", "--values", '{"name":"X"}'],
+        ["unlink", "res.partner", "--ids", "[1]"],
+    ],
+)
+def test_readonly_refuses_mutating_commands(argv, capsys, capture_client, tmp_path):
+    rc = odoo.main(argv + _ro_config(tmp_path), client_factory=capture_client["factory"])
+    assert rc == odoo.EXIT_USAGE
+    assert "read-only profile" in json.loads(capsys.readouterr().out)["error"]
+    # Refused before any connection is attempted, so a read-only profile never
+    # authenticates for a write it was going to reject anyway.
+    assert "client" not in capture_client
+
+
+def test_readonly_refuses_execute_method_outside_whitelist(
+    capsys, capture_client, tmp_path
+):
+    rc = odoo.main(
+        ["execute-method", "sale.order", "action_confirm", "--args", "[[1]]"]
+        + _ro_config(tmp_path),
+        client_factory=capture_client["factory"],
+    )
+    assert rc == odoo.EXIT_USAGE
+    assert "action_confirm" in json.loads(capsys.readouterr().out)["error"]
+    assert "client" not in capture_client
+
+
+@pytest.mark.parametrize("method", sorted(odoo.READONLY_METHODS))
+def test_readonly_allows_whitelisted_execute_method(
+    method, capsys, capture_client, tmp_path
+):
+    rc = odoo.main(
+        ["execute-method", "stock.move", method, "--args", "[[]]"]
+        + _ro_config(tmp_path),
+        client_factory=capture_client["factory"],
+    )
+    assert rc == odoo.EXIT_OK
+    assert capture_client["client"].calls[0][1] == method
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["search-read", "res.partner", "--fields", '["name"]'],
+        ["read", "res.partner", "--ids", "[1]"],
+        ["list-models"],
+        ["list-fields", "res.partner"],
+    ],
+)
+def test_readonly_allows_read_commands(argv, capture_client, tmp_path):
+    rc = odoo.main(argv + _ro_config(tmp_path), client_factory=capture_client["factory"])
+    assert rc == odoo.EXIT_OK
+
+
+def test_writable_profile_still_writes(capture_client, tmp_path):
+    rc = odoo.main(
+        ["write", "res.partner", "--ids", "[1]", "--values", '{"name":"X"}',
+         "--profile", "live"] + _ro_config(tmp_path),
+        client_factory=capture_client["factory"],
+    )
+    assert rc == odoo.EXIT_OK
+    assert capture_client["client"].calls[0][1] == "write"
