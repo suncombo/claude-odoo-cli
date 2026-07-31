@@ -5,6 +5,17 @@ own CLI at `skills/odoo/scripts/odoo.py`, so it works in any agent that supports
 Agent Skills format. Also ships as a Claude Code plugin with an `/odoo:odoo` slash command.
 Replaces the older `suncombo-odoo-mcp` MCP server.
 
+## Skills
+
+| Skill | For |
+|---|---|
+| `odoo` | Record data and schema — search/read/create/write/delete, list models and fields, run workflow actions. |
+| `registry` | Provenance — which modules are installed, which of them extended a model's fields, which module owns a view/ACL/rule. Read-only. |
+
+`registry` imports the `odoo` skill's client, so the two install together; it is not
+usable on its own. The dividing line: what a field *is* → `odoo`; what *added* it →
+`registry`.
+
 ## Configure
 
 Copy `config.example.json` to `~/.config/odoo-cli/config.json` and edit profiles.
@@ -23,6 +34,10 @@ to — a frozen legacy system, or a production database you only report on. `cre
 python3 skills/odoo/scripts/odoo.py search-read res.partner --fields '["name","email"]' --limit 5
 python3 skills/odoo/scripts/odoo.py --help
 python3 skills/odoo/scripts/odoo.py config list
+
+python3 skills/registry/scripts/registry.py model sale.order
+python3 skills/registry/scripts/registry.py model sale.order --module truney_smart_price_lock
+python3 skills/registry/scripts/registry.py modules --addons-path /path/to/addons
 ```
 
 ## Install the skill (any agent)
