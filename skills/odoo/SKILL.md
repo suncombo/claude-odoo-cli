@@ -25,8 +25,9 @@ Resolve `<skill-dir>` by how the skill was installed:
 
 Below, `odoo.py` is shorthand for that full path. Select the Odoo instance with
 `--profile <name>` (defaults to the config's `default_profile`). Connection comes from
-`~/.config/odoo-cli/config.json`; `ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD` override
-individual fields.
+`.config/odoo-cli/config.json` in the current directory if present, otherwise
+`~/.config/odoo-cli/config.json` (`--config PATH` overrides both);
+`ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD` override individual fields.
 
 ## Subcommands
 

@@ -90,6 +90,14 @@ def coerce_json(value):
 
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "odoo-cli" / "config.json"
+# Searched in order when `--config` is absent. The working-directory copy comes first:
+# a checkout that ships its own profiles is making a statement about which instance
+# work in that directory belongs to, and that is more specific than the personal
+# default. The home copy is what answers everywhere else.
+CONFIG_PATH_CANDIDATES = (
+    Path(".config") / "odoo-cli" / "config.json",
+    DEFAULT_CONFIG_PATH,
+)
 
 _CONN_DEFAULTS = {
     "url": "http://localhost:8069",
@@ -114,9 +122,24 @@ class ConfigError(Exception):
     """Raised for configuration/usage problems (bad profile, etc.)."""
 
 
-def load_config(path=DEFAULT_CONFIG_PATH):
+def resolve_config_path(cwd=None):
+    """Return the config file to read when the caller named none.
+
+    First existing candidate wins. With none present the home path is returned —
+    `config use` then creates the personal config rather than scattering one into
+    whichever directory the command happened to run from.
+    """
+    base = Path.cwd() if cwd is None else Path(cwd)
+    for candidate in CONFIG_PATH_CANDIDATES:
+        path = candidate if candidate.is_absolute() else base / candidate
+        if path.exists():
+            return path
+    return DEFAULT_CONFIG_PATH
+
+
+def load_config(path=None):
     """Return the parsed config file, or {} if it does not exist."""
-    p = Path(path)
+    p = Path(path) if path is not None else resolve_config_path()
     if not p.exists():
         return {}
     return json.loads(p.read_text(encoding="utf-8"))
@@ -365,7 +388,7 @@ def cmd_execute_method(client, args):
 
 def cmd_config(args):
     """Handle `config list` / `config use <name>`. Returns an exit code."""
-    path = Path(args.config)
+    path = Path(args.config) if args.config else resolve_config_path()
     config = load_config(path)
     if args.action == "list":
         masked = {}
@@ -374,7 +397,13 @@ def cmd_config(args):
             masked[name]["password"] = "***" if prof.get("password") else None
         sys.stdout.write(
             json.dumps(
-                {"default_profile": config.get("default_profile"), "profiles": masked},
+                {
+                    # Which of the candidate files answered — without it, two configs
+                    # on disk make an unexpected profile list impossible to explain.
+                    "config_path": str(path),
+                    "default_profile": config.get("default_profile"),
+                    "profiles": masked,
+                },
                 ensure_ascii=False,
                 indent=2,
             )
@@ -388,7 +417,9 @@ def cmd_config(args):
     config["default_profile"] = args.name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-    sys.stdout.write(json.dumps({"default_profile": args.name}) + "\n")
+    sys.stdout.write(
+        json.dumps({"config_path": str(path), "default_profile": args.name}) + "\n"
+    )
     return EXIT_OK
 
 
@@ -398,7 +429,10 @@ def build_parser():
 
     conn = argparse.ArgumentParser(add_help=False)
     conn.add_argument("--profile")
-    conn.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
+    # Left unset rather than defaulted to a path: the search over
+    # CONFIG_PATH_CANDIDATES happens at run time, in the working directory the
+    # command was actually invoked from.
+    conn.add_argument("--config", default=None)
 
     out = argparse.ArgumentParser(add_help=False)
     out.add_argument("--out")
@@ -459,7 +493,7 @@ def build_parser():
     cfg = sub.add_parser("config")
     cfg.add_argument("action", choices=["list", "use"])
     cfg.add_argument("name", nargs="?")
-    cfg.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
+    cfg.add_argument("--config", default=None)
     cfg.set_defaults(func=None)
 
     return parser
@@ -469,7 +503,7 @@ def main(argv=None, *, client_factory=OdooClient):
     args = build_parser().parse_args(argv)
     if args.command == "config":
         return cmd_config(args)
-    config = load_config(getattr(args, "config", None) or DEFAULT_CONFIG_PATH)
+    config = load_config(getattr(args, "config", None))
     try:
         conn = resolve_connection(config, profile=getattr(args, "profile", None))
     except ConfigError as e:

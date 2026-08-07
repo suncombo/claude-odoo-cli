@@ -22,6 +22,17 @@ Copy `config.example.json` to `~/.config/odoo-cli/config.json` and edit profiles
 Passwords can be omitted from the file and supplied via `ODOO_PASSWORD` (per-field
 `ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD` override the selected profile).
 
+With no `--config` flag, two locations are searched and the first that exists wins:
+
+1. `.config/odoo-cli/config.json` in the directory the command was run from
+2. `~/.config/odoo-cli/config.json`
+
+A project that ships its own config therefore overrides your personal one for
+commands run inside it — useful when a checkout's profiles belong with the code.
+Note the flip side: the instance a command talks to depends on where it is run
+from, so `config list` reports which file answered as `config_path`. If neither
+exists, `config use` creates the home one.
+
 Mark a profile `"readonly": true` when the instance behind it must never be written
 to — a frozen legacy system, or a production database you only report on. `create`,
 `write` and `unlink` are then refused with exit 2 before the CLI authenticates, and

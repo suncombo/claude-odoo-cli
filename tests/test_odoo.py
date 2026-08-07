@@ -140,6 +140,46 @@ def test_load_config_reads_json(tmp_path):
     assert odoo.load_config(p)["default_profile"] == "dev"
 
 
+def _write_config(path, payload=CONFIG):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _fake_home(monkeypatch, path):
+    """Point the home candidate at `path` without touching the real ~/.config."""
+    monkeypatch.setattr(odoo, "DEFAULT_CONFIG_PATH", path)
+    monkeypatch.setattr(
+        odoo, "CONFIG_PATH_CANDIDATES",
+        (odoo.Path(".config") / "odoo-cli" / "config.json", path),
+    )
+    return path
+
+
+def test_resolve_config_path_prefers_cwd_over_home(tmp_path, monkeypatch):
+    _fake_home(monkeypatch, _write_config(tmp_path / "home.json"))
+    local = _write_config(tmp_path / "work" / ".config" / "odoo-cli" / "config.json")
+    assert odoo.resolve_config_path(tmp_path / "work") == local
+
+
+def test_resolve_config_path_falls_back_to_home(tmp_path, monkeypatch):
+    home = _fake_home(monkeypatch, _write_config(tmp_path / "home.json"))
+    assert odoo.resolve_config_path(tmp_path / "work") == home
+
+
+def test_resolve_config_path_with_neither_present_returns_home(tmp_path, monkeypatch):
+    missing = _fake_home(monkeypatch, tmp_path / "absent.json")
+    assert odoo.resolve_config_path(tmp_path / "work") == missing
+
+
+def test_resolve_config_path_uses_the_invocation_directory(tmp_path, monkeypatch):
+    """The cwd candidate is relative, so it must follow where the command was run."""
+    _fake_home(monkeypatch, tmp_path / "absent.json")
+    local = _write_config(tmp_path / "work" / ".config" / "odoo-cli" / "config.json")
+    monkeypatch.chdir(tmp_path / "work")
+    assert odoo.resolve_config_path() == local
+
+
 def test_classify_connection_refused():
     err, code = odoo.classify_error(ConnectionRefusedError(), "http://x")
     assert code == odoo.EXIT_CONN
@@ -259,6 +299,17 @@ def capture_client(monkeypatch):
 
 def _no_config(tmp_path):
     return ["--config", str(tmp_path / "none.json")]
+
+
+def test_main_lets_the_cwd_config_override_the_home_one(
+    capture_client, tmp_path, monkeypatch
+):
+    home = {"default_profile": "prod", "profiles": CONFIG["profiles"]}
+    _fake_home(monkeypatch, _write_config(tmp_path / "home.json", home))
+    _write_config(tmp_path / "work" / ".config" / "odoo-cli" / "config.json")
+    monkeypatch.chdir(tmp_path / "work")
+    odoo.main(["search-read", "res.partner"], client_factory=capture_client["factory"])
+    assert capture_client["client"].kw["url"] == "http://dev"
 
 
 def test_main_search_read_maps(capsys, capture_client, tmp_path):

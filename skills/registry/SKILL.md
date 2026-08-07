@@ -29,7 +29,9 @@ this `SKILL.md`, or `"${CLAUDE_PLUGIN_ROOT}/skills/registry/scripts/registry.py"
 as a Claude Code plugin. Below, `registry.py` is shorthand for that full path.
 
 Connection flags match the `odoo` skill: `--profile`, `--config`, plus
-`--inline` / `--out` / `--max-inline-bytes` for output.
+`--inline` / `--out` / `--max-inline-bytes` for output. Without `--config`, the
+same lookup applies — `.config/odoo-cli/config.json` in the current directory,
+then `~/.config/odoo-cli/config.json`.
 
 ## Subcommands
 

@@ -25,7 +25,6 @@ sys.path.insert(
 
 try:
     from odoo import (  # noqa: E402
-        DEFAULT_CONFIG_PATH,
         DEFAULT_MAX_INLINE_BYTES,
         EXIT_OK,
         EXIT_USAGE,
@@ -324,7 +323,10 @@ def build_parser():
 
     conn = argparse.ArgumentParser(add_help=False)
     conn.add_argument("--profile")
-    conn.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
+    # Unset means "search the candidate paths at run time" — see odoo.py's
+    # resolve_config_path. Defaulting to a path here would pin this skill to the
+    # home config and diverge from the odoo skill's lookup.
+    conn.add_argument("--config", default=None)
 
     out = argparse.ArgumentParser(add_help=False)
     out.add_argument("--out")
@@ -367,7 +369,7 @@ def build_parser():
 
 def main(argv=None, *, client_factory=OdooClient):
     args = build_parser().parse_args(argv)
-    config = load_config(getattr(args, "config", None) or DEFAULT_CONFIG_PATH)
+    config = load_config(getattr(args, "config", None))
     try:
         conn = resolve_connection(config, profile=getattr(args, "profile", None))
     except ConfigError as e:
