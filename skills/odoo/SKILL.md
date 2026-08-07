@@ -4,7 +4,7 @@ description: Use for any Odoo ERP operation over JSON-RPC — search/read/create
 allowed-tools: Bash(python3 *)
 metadata:
   author: truney
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Odoo ERP CLI
