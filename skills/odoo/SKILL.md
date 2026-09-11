@@ -57,7 +57,8 @@ When invoked as a slash command, `$ARGUMENTS` holds the user's input:
 
 Common flags on data commands: `--profile`, `--out PATH`, `--inline`,
 `--lang CODE`, `--context JSON`, `--max-inline-bytes N`. `--context` is a JSON
-object merged into the Odoo context; `--lang` wins on the `lang` key.
+object merged into the Odoo context; `--lang` wins on the `lang` key, and both
+override a profile's `"lang"` (see "Profile language").
 
 Which subcommand for which need:
 
@@ -95,6 +96,14 @@ judged by method name: only `read_group`, `search_count`, `fields_get` and
 `name_search` pass — `search_read` does not. Read records with `search-read`
 (`--context '{"active_test":false}'` for archived rows), never with
 `execute-method search_read`.
+
+## Profile language
+
+A profile carrying `"lang": "zh_TW"` sends `context.lang = "zh_TW"` on `search-read`,
+`read`, `list-fields`, `execute-method`, `create` and `write`, so translated fields
+search and read in that language without `--lang` on each call. Precedence, lowest to highest: profile `lang` < `ODOO_LANG` env <
+`--kwargs` context < `--context` < `--lang`. A profile without `lang` sends no
+`lang` key.
 
 ## Domain syntax
 

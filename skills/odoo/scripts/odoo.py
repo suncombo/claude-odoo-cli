@@ -134,12 +134,18 @@ _CONN_DEFAULTS = {
     # It belongs to the profile rather than to the invocation because the property
     # being protected is the target, and a caller who has to opt in can forget to.
     "readonly": False,
+    # Set `"lang"` on a profile to the language its operators read the UI in.
+    # Translated fields search and read differently per context lang, and with none
+    # Odoo falls back to server-side defaults, so a caller who forgets `--lang`
+    # gets numbers that depend on the instance. Same reasoning as `readonly`.
+    "lang": None,
 }
 _ENV_KEYS = {
     "url": "ODOO_URL",
     "db": "ODOO_DB",
     "user": "ODOO_USER",
     "password": "ODOO_PASSWORD",
+    "lang": "ODOO_LANG",
 }
 
 
@@ -327,8 +333,12 @@ def emit_result(
 
 
 def _context_kwargs(args, base=None):
-    """Merge context sources: --kwargs context < --context < --lang."""
-    context = dict((base or {}).get("context") or {})
+    """Merge context sources: profile lang < --kwargs context < --context < --lang."""
+    context = {}
+    profile_lang = getattr(args, "profile_lang", None)
+    if profile_lang:
+        context["lang"] = profile_lang
+    context.update((base or {}).get("context") or {})
     context.update(
         parse_json_flag(getattr(args, "context", None), "--context", dict) or {}
     )
@@ -406,7 +416,7 @@ def cmd_list_models(client, args):
 
 
 def cmd_list_fields(client, args):
-    kwargs = {}
+    kwargs = dict(_context_kwargs(args))
     attributes = parse_json_flag(args.attributes, "--attributes", list)
     if attributes is not None:
         kwargs["attributes"] = attributes
@@ -594,6 +604,8 @@ def main(argv=None, *, client_factory=OdooClient):
     client = client_factory(
         url=conn["url"], db=conn["db"], username=conn["user"], password=conn["password"]
     )
+    # Kept apart from `args.lang` (the --lang flag) so the flag can still win.
+    args.profile_lang = conn["lang"]
     try:
         result = args.func(client, args)
     except Exception as e:  # noqa: BLE001 - classified below

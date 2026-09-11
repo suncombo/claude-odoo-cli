@@ -730,3 +730,96 @@ def test_search_count_skips_prefix_operators(capsys, tmp_path):
     client, err = _search_count(capsys, tmp_path, schema, domain)
     assert client.calls[0][2] == [["order_line"]]
     assert err.count("warning:") == 1
+
+
+LANG_CONFIG = {
+    "default_profile": "tw",
+    "profiles": {
+        "tw": {"url": "http://tw", "db": "t", "user": "u", "password": "p",
+               "lang": "zh_TW"},
+        "plain": {"url": "http://plain", "db": "n", "user": "u", "password": "p"},
+    },
+}
+
+
+def _lang_config(tmp_path):
+    cfg = tmp_path / "lang.json"
+    cfg.write_text(json.dumps(LANG_CONFIG), encoding="utf-8")
+    return ["--config", str(cfg)]
+
+
+def test_lang_defaults_off_and_comes_from_profile():
+    assert odoo.resolve_connection(LANG_CONFIG, profile="plain", env={})["lang"] is None
+    assert odoo.resolve_connection(LANG_CONFIG, profile="tw", env={})["lang"] == "zh_TW"
+
+
+def test_lang_env_overrides_profile():
+    c = odoo.resolve_connection(LANG_CONFIG, profile="tw", env={"ODOO_LANG": "en_US"})
+    assert c["lang"] == "en_US"
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["search-read", "res.partner"],
+        ["read", "res.partner", "--ids", "[1]"],
+        ["list-fields", "res.partner"],
+        ["execute-method", "res.partner", "name_search", "--args", '["x"]'],
+        ["create", "res.partner", "--values", '{"name":"X"}'],
+        ["write", "res.partner", "--ids", "[1]", "--values", '{"name":"X"}'],
+    ],
+)
+def test_profile_lang_seeds_context(argv, capture_client, tmp_path, monkeypatch):
+    monkeypatch.delenv("ODOO_LANG", raising=False)
+    odoo.main(argv + _lang_config(tmp_path), client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"]["lang"] == "zh_TW"
+
+
+def test_profile_without_lang_sends_no_context(capture_client, tmp_path, monkeypatch):
+    monkeypatch.delenv("ODOO_LANG", raising=False)
+    odoo.main(["search-read", "res.partner", "--profile", "plain"] + _lang_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert "context" not in kwargs
+
+
+def test_lang_flag_overrides_profile_lang(capture_client, tmp_path, monkeypatch):
+    monkeypatch.delenv("ODOO_LANG", raising=False)
+    odoo.main(["search-read", "res.partner", "--lang", "en_US"] + _lang_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"lang": "en_US"}
+
+
+def test_context_flag_overrides_profile_lang_and_loses_to_lang_flag(
+    capture_client, tmp_path, monkeypatch
+):
+    monkeypatch.delenv("ODOO_LANG", raising=False)
+    odoo.main(["search-read", "res.partner", "--context", '{"lang":"fr_FR"}']
+              + _lang_config(tmp_path), client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"lang": "fr_FR"}
+
+    odoo.main(["search-read", "res.partner", "--context", '{"lang":"fr_FR"}',
+               "--lang", "en_US"] + _lang_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"lang": "en_US"}
+
+
+def test_kwargs_context_overrides_profile_lang(capture_client, tmp_path, monkeypatch):
+    monkeypatch.delenv("ODOO_LANG", raising=False)
+    odoo.main(["execute-method", "res.partner", "name_search", "--args", '["x"]',
+               "--kwargs", '{"context":{"lang":"fr_FR"}}'] + _lang_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"lang": "fr_FR"}
+
+
+def test_odoo_lang_env_reaches_context(capture_client, tmp_path, monkeypatch):
+    monkeypatch.setenv("ODOO_LANG", "en_US")
+    odoo.main(["search-read", "res.partner"] + _lang_config(tmp_path),
+              client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"lang": "en_US"}
