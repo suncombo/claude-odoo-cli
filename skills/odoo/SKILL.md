@@ -1,6 +1,6 @@
 ---
 name: odoo
-description: Use for any Odoo ERP operation over JSON-RPC — search/read/create/write/delete records, explore models and fields, run workflow actions (e.g. confirm a sale order), or translate fields. Invokes the bundled zero-dependency CLI via Bash.
+description: Use for any Odoo ERP operation over JSON-RPC — search/read/create/write/delete records, count or aggregate with read_group, explore models and fields, run workflow actions (e.g. confirm a sale order), or translate fields.
 allowed-tools: Bash(python3 *)
 metadata:
   author: truney
@@ -47,14 +47,19 @@ Common flags on data commands: `--profile`, `--out PATH`, `--inline`,
 `--lang CODE`, `--context JSON`, `--max-inline-bytes N`. `--context` is a JSON
 object merged into the Odoo context; `--lang` wins on the `lang` key.
 
+Which subcommand for which need:
+
+| Need | Use |
+|---|---|
+| Read records or settings | `search-read` — add `--context '{"active_test":false}'` to include archived rows |
+| Count or aggregate | `execute-method <model> search_count` / `read_group` (see below) |
+| Field definitions | `list-fields <model>` |
+| Find an id by name | `execute-method <model> name_search` |
+
 ### `search-read` row limits
 
-`--limit` is **not** set by default: `search-read` returns every matching row,
-so counting and inventory queries are correct without extra flags. Large
-results spill to a file automatically, so this does not flood the context.
-
-A 10,000-row safety cap protects the Odoo worker. Filling it is an **error**
-(exit 2), never a short result:
+`--limit` is **not** set by default: `search-read` returns every matching row.
+Filling the 10,000-row safety cap is an **error** (exit 2), never a short result:
 
 ```
 {"error": "sale.order.line: filled the 10000-row safety cap, so this result is
@@ -66,26 +71,18 @@ limit is never treated as an error, even when completely filled.
 
 ## Read-only profiles
 
-A profile carrying `"readonly": true` refuses anything that could modify data.
-`create`, `write`, `unlink` and any unrecognised subcommand are rejected before the
-CLI even authenticates:
+A profile carrying `"readonly": true` refuses `create`, `write`, `unlink` and any
+unrecognised subcommand before the CLI even authenticates:
 
 ```
 {"error": "read-only profile: 'write' can modify data"}   # exit 2
 ```
 
-`execute-method` is judged by method name, since it can reach anything the ORM
-exposes. Only `read_group`, `search_count`, `fields_get` and `name_search` pass —
-the read paths the other subcommands cannot cover, notably counting and aggregating
-past `search-read`'s row cap.
-
-Use it for an instance that must never be written to: a frozen legacy system, or a
-production database you only report on. The flag lives on the profile rather than
-the invocation, so it protects the target no matter who calls or how.
-
-To include archived rows on a read-only profile, use
-`search-read --context '{"active_test": false}'` — `execute-method search_read`
-stays refused.
+`search-read`, `read`, `list-models` and `list-fields` pass. `execute-method` is
+judged by method name: only `read_group`, `search_count`, `fields_get` and
+`name_search` pass — `search_read` does not. Read records with `search-read`
+(`--context '{"active_test":false}'` for archived rows), never with
+`execute-method search_read`.
 
 ## Domain syntax
 
@@ -94,14 +91,44 @@ Prefix logic operators: `"&"` (AND, default), `"|"` (OR), `"!"` (NOT).
 
 - OR: `["|", ["name","ilike","gold"], ["name","ilike","silver"]]`
 - AND+OR: `["&", ["active","=",true], "|", ["name","ilike","a"], ["name","ilike","b"]]`
+- `"!"` on `=like` / `=ilike` becomes SQL `NOT` and drops rows where the field is
+  NULL; `!=`, `not in`, `not like`, `not ilike` keep them. To negate a prefix match
+  without losing empties, count `[["f","=",false]]` separately and add it.
+- A condition through a one2many/many2many path means "some child matches". Two
+  such conditions can be satisfied by two different children, and
+  `[["lines.f","=",false]]` never matches a parent with no lines. To count parents
+  by child conditions, `read_group` the child model by its parent field. On
+  Odoo 13, `search_count` through an `auto_join` one2many counts one per matching
+  child, not per parent.
+- A non-stored field with no `search` implementation is silently dropped from the
+  domain: Odoo logs an error and returns the unfiltered set. Check `store` with
+  `list-fields` first; query the stored field on the related record instead
+  (`mail_message_id.subject`, not `subject`).
+- Datetimes are stored and compared in UTC and returned to the second. Match a
+  timestamp with `>= T` and `< T+1s`, never `=`; compute "today" / "N days ago"
+  boundaries in UTC.
+
+## `read_group`
+
+```bash
+python3 <skill-dir>/scripts/odoo.py execute-method sale.order read_group \
+  --args '[[["state","=","sale"]], ["partner_id","amount_total:sum"], ["partner_id"]]' \
+  --kwargs '{"lazy":false}'
+```
+
+- Pass `{"lazy":false}` to group by every field in the list; the count column is
+  then `__count`. In the default lazy mode only the first field groups and the
+  count is `<first_field>_count`.
+- many2one group keys come back as `[id, display_name]`.
+- The same field twice needs aliases: `"first:min(date_created)"`,
+  `"last:max(date_created)"`.
+- many2many fields cannot be grouped on (Odoo ≤16); run `search_count` per id instead.
 
 ## Gotchas
 
 - `create --values` takes a plain JSON object: `'{"name":"X"}'` (not wrapped in a list).
 - `execute-method --args` is a list of positional args: `copy([10])` → `--args '[[10]]'`;
   `write([id], vals)` → use the dedicated `write` command instead.
-- JSON flags are strict: a value that is not valid JSON of the right shape is a
-  usage error (exit 2) naming the flag and an example — nothing reaches Odoo.
 
 ## Common patterns
 
