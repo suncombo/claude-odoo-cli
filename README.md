@@ -40,9 +40,10 @@ to — a frozen legacy system, or a production database you only report on. `cre
 `name_search`.
 
 Set `"lang": "zh_TW"` on a profile to send that language in the Odoo context on
-reads, writes and `execute-method`, so translated fields search and read the way the
-instance's operators see them without `--lang` on each call. `ODOO_LANG` overrides the profile field, and
-`--context` / `--lang` override both.
+`search-read`, `read`, `list-fields`, `execute-method`, `create` and `write`, so
+translated fields search and read the way the instance's operators see them without
+`--lang` on each call. `ODOO_LANG` overrides the profile field; a `--kwargs` context,
+`--context` and `--lang` override both, in that order.
 
 ## Use from the shell
 

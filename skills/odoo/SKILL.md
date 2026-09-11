@@ -101,9 +101,9 @@ judged by method name: only `read_group`, `search_count`, `fields_get` and
 
 A profile carrying `"lang": "zh_TW"` sends `context.lang = "zh_TW"` on `search-read`,
 `read`, `list-fields`, `execute-method`, `create` and `write`, so translated fields
-search and read in that language without `--lang` on each call. Precedence, lowest to highest: profile `lang` < `ODOO_LANG` env <
-`--kwargs` context < `--context` < `--lang`. A profile without `lang` sends no
-`lang` key.
+search and read in that language without `--lang` on each call. Precedence, lowest
+to highest: profile `lang` < `ODOO_LANG` env < `--kwargs` context < `--context` <
+`--lang`. A profile without `lang` sends no `lang` key.
 
 ## Domain syntax
 

@@ -416,7 +416,7 @@ def cmd_list_models(client, args):
 
 
 def cmd_list_fields(client, args):
-    kwargs = dict(_context_kwargs(args))
+    kwargs = _context_kwargs(args)
     attributes = parse_json_flag(args.attributes, "--attributes", list)
     if attributes is not None:
         kwargs["attributes"] = attributes
