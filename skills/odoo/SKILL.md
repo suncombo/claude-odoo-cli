@@ -106,6 +106,13 @@ Prefix logic operators: `"&"` (AND, default), `"|"` (OR), `"!"` (NOT).
 - `"!"` on `=like` / `=ilike` becomes SQL `NOT` and drops rows where the field is
   NULL; `!= value`, `not in`, `not like`, `not ilike` keep them. To negate a prefix match
   without losing empties, count `[["f","=",false]]` separately and add it.
+- `html` fields (`mail.message.body`, `note`, ...) are stored sanitized. The outer
+  tag (`<p>`, `<span>`, `<div>`) comes from the write path, not from the code that
+  posted the text, and varies between records. Do not anchor `=like` on a tag:
+  match the inner text with `ilike`, or, when a prefix anchor is required,
+  `search-read` a few rows to see which wrappers exist, run one query per
+  observed wrapper, and deduplicate on the parent record (`res_id` for
+  `mail.message`).
 - A condition through a one2many/many2many path means "some child matches". Two
   such conditions can be satisfied by two different children, and
   `[["lines.f","=",false]]` never matches a parent with no lines. To count parents
