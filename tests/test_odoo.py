@@ -413,6 +413,37 @@ def test_main_search_read_lang_context(capsys, capture_client, tmp_path):
     assert kwargs["context"] == {"lang": "zh_TW"}
 
 
+def test_main_search_read_context_flag(capsys, capture_client, tmp_path):
+    odoo.main(["search-read", "res.partner", "--context", '{"active_test":false}']
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"active_test": False}
+
+
+def test_main_lang_wins_over_context_flag(capsys, capture_client, tmp_path):
+    odoo.main(["search-read", "res.partner",
+               "--context", '{"active_test":false,"lang":"en_US"}', "--lang", "zh_TW"]
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs["context"] == {"active_test": False, "lang": "zh_TW"}
+
+
+def test_main_execute_method_merges_kwargs_context(capsys, capture_client, tmp_path):
+    """--context layers on top of a context inside --kwargs; other kwargs survive."""
+    odoo.main(["execute-method", "sale.order", "action_confirm", "--args", "[[1]]",
+               "--kwargs", '{"context":{"a":1},"x":2}', "--context", '{"b":2}']
+              + _no_config(tmp_path), client_factory=capture_client["factory"])
+    _, _, _, kwargs = capture_client["client"].calls[0]
+    assert kwargs == {"x": 2, "context": {"a": 1, "b": 2}}
+
+
+def test_main_context_flag_must_be_object(capsys, capture_client, tmp_path):
+    rc = odoo.main(["search-read", "res.partner", "--context", "zh_TW"]
+                   + _no_config(tmp_path), client_factory=capture_client["factory"])
+    assert rc == odoo.EXIT_USAGE
+    assert "--context" in json.loads(capsys.readouterr().out)["error"]
+
+
 def test_main_bad_profile_returns_usage(capsys, capture_client, tmp_path):
     cfg = tmp_path / "c.json"
     cfg.write_text(json.dumps({"profiles": {}}), encoding="utf-8")

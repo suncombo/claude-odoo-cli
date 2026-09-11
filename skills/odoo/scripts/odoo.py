@@ -88,6 +88,7 @@ EXAMPLES = {
     "--args": '[[5]]',
     "--kwargs": '{"default":{"name":"New"}}',
     "--attributes": '["string","type"]',
+    "--context": '{"active_test":false}',
 }
 
 
@@ -325,12 +326,16 @@ def emit_result(
     return str(path)
 
 
-def _context_kwargs(args):
-    """Return {'context': {'lang': ...}} if --lang was given, else {}."""
+def _context_kwargs(args, base=None):
+    """Merge context sources: --kwargs context < --context < --lang."""
+    context = dict((base or {}).get("context") or {})
+    context.update(
+        parse_json_flag(getattr(args, "context", None), "--context", dict) or {}
+    )
     lang = getattr(args, "lang", None)
     if lang:
-        return {"context": {"lang": lang}}
-    return {}
+        context["lang"] = lang
+    return {"context": context} if context else {}
 
 
 def cmd_search_read(client, args):
@@ -410,7 +415,7 @@ def cmd_list_fields(client, args):
 
 def cmd_execute_method(client, args):
     kwargs = parse_json_flag(args.kwargs, "--kwargs", dict) or {}
-    kwargs.update(_context_kwargs(args))
+    kwargs.update(_context_kwargs(args, kwargs))
     return client.execute_kw(
         args.model, args.method, parse_json_flag(args.args, "--args", list), kwargs or None
     )
@@ -468,6 +473,7 @@ def build_parser():
     out.add_argument("--out")
     out.add_argument("--inline", action="store_true")
     out.add_argument("--lang")
+    out.add_argument("--context")
     out.add_argument(
         "--max-inline-bytes", type=int, dest="max_inline_bytes",
         default=DEFAULT_MAX_INLINE_BYTES,

@@ -44,7 +44,8 @@ Below, `odoo.py` is shorthand for that full path. Select the Odoo instance with
 | `config list` / `config use <name>` | Inspect / switch the default profile. |
 
 Common flags on data commands: `--profile`, `--out PATH`, `--inline`,
-`--lang CODE`, `--max-inline-bytes N`.
+`--lang CODE`, `--context JSON`, `--max-inline-bytes N`. `--context` is a JSON
+object merged into the Odoo context; `--lang` wins on the `lang` key.
 
 ### `search-read` row limits
 
@@ -82,6 +83,10 @@ Use it for an instance that must never be written to: a frozen legacy system, or
 production database you only report on. The flag lives on the profile rather than
 the invocation, so it protects the target no matter who calls or how.
 
+To include archived rows on a read-only profile, use
+`search-read --context '{"active_test": false}'` — `execute-method search_read`
+stays refused.
+
 ## Domain syntax
 
 `[["field", "op", value]]` — ops: `=, !=, like, ilike, in, not in, >, <, >=, <=, =?, child_of`.
@@ -104,6 +109,10 @@ Prefix logic operators: `"&"` (AND, default), `"|"` (OR), `"!"` (NOT).
 # Translate a product name to Traditional Chinese
 python3 <skill-dir>/scripts/odoo.py write product.template \
   --ids '[10209]' --values '{"name":"中文名"}' --lang zh_TW
+
+# Include archived partners
+python3 <skill-dir>/scripts/odoo.py search-read res.partner \
+  --fields '["name","active"]' --context '{"active_test":false}'
 
 # Copy a record with overrides
 python3 <skill-dir>/scripts/odoo.py execute-method product.template \
