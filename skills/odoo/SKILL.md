@@ -5,7 +5,7 @@ allowed-tools: Bash(python3 *)
 argument-hint: "[search-read res.partner --limit 5  |  a plain-English Odoo request]"
 metadata:
   author: truney
-  version: "0.7.0"
+  version: "0.8.0"
 ---
 
 # Odoo ERP CLI
