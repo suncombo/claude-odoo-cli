@@ -2,6 +2,7 @@
 name: registry
 description: Use to find out which Odoo module something came from, or what a module contributed — which modules are actually installed, which of them extended a given model's fields, and which module owns a view, ACL, or record rule. Read-only, answered from the live database's own registry (ir.model.data, ir.module.module). Reach for this when the question is provenance ("who added this", "which modules touch sale.order", "is this module really installed"), not record data.
 allowed-tools: Bash(python3 *)
+argument-hint: "[model sale.order  |  module truney_hedge_sale  |  modules --state installed  |  a plain-English provenance question]"
 metadata:
   author: truney
   version: "0.1.0"
@@ -32,6 +33,16 @@ Connection flags match the `odoo` skill: `--profile`, `--config`, plus
 `--inline` / `--out` / `--max-inline-bytes` for output. Without `--config`, the
 same lookup applies — `.config/odoo-cli/config.json` in the current directory,
 then `~/.config/odoo-cli/config.json`.
+
+## Slash invocation (`/odoo:registry`)
+
+When invoked as a slash command, `$ARGUMENTS` holds the user's input:
+
+1. **Direct passthrough** — if it begins with `model`, `module` or `modules`, run
+   `registry.py $ARGUMENTS` verbatim and show the result.
+2. **Natural language** — otherwise treat it as a provenance question (e.g. "哪些
+   模組改過 sale.order 的欄位", "truney_hedge_sale 有裝嗎"): pick the right
+   subcommand below and run it.
 
 ## Subcommands
 

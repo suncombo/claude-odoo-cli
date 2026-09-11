@@ -2,6 +2,7 @@
 name: odoo
 description: Use for any Odoo ERP operation over JSON-RPC — search/read/create/write/delete records, count or aggregate with read_group, explore models and fields, run workflow actions (e.g. confirm a sale order), or translate fields.
 allowed-tools: Bash(python3 *)
+argument-hint: "[search-read res.partner --limit 5  |  a plain-English Odoo request]"
 metadata:
   author: truney
   version: "0.6.1"
@@ -28,6 +29,17 @@ Below, `odoo.py` is shorthand for that full path. Select the Odoo instance with
 `.config/odoo-cli/config.json` in the current directory if present, otherwise
 `~/.config/odoo-cli/config.json` (`--config PATH` overrides both);
 `ODOO_URL/ODOO_DB/ODOO_USER/ODOO_PASSWORD` override individual fields.
+
+## Slash invocation (`/odoo:odoo`)
+
+When invoked as a slash command, `$ARGUMENTS` holds the user's input:
+
+1. **Direct passthrough** — if it begins with a subcommand verb (`search-read`,
+   `read`, `create`, `write`, `unlink`, `list-models`, `list-fields`,
+   `execute-method`, `config`), run `odoo.py $ARGUMENTS` verbatim and show the result.
+2. **Natural language** — otherwise treat it as a request (e.g. "翻譯 product 10209
+   名稱成中文"): pick the right subcommand(s) below and run them.
+3. **Empty** — briefly list the subcommands.
 
 ## Subcommands
 
