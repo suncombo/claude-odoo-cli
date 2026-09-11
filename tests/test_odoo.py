@@ -72,20 +72,33 @@ def test_client_raises_on_auth_failure(monkeypatch):
         client.execute_kw("m", "a")
 
 
-def test_coerce_json_parses_list():
-    assert odoo.coerce_json('[["is_company","=",true]]') == [["is_company", "=", True]]
+def test_parse_json_flag_parses_list():
+    assert odoo.parse_json_flag('[["is_company","=",true]]', "--domain", list) == [
+        ["is_company", "=", True]
+    ]
 
 
-def test_coerce_json_parses_dict():
-    assert odoo.coerce_json('{"name": "X"}') == {"name": "X"}
+def test_parse_json_flag_parses_dict():
+    assert odoo.parse_json_flag('{"name": "X"}', "--values", dict) == {"name": "X"}
 
 
-def test_coerce_json_literal_fallback():
-    assert odoo.coerce_json("name asc") == "name asc"
+def test_parse_json_flag_none():
+    assert odoo.parse_json_flag(None, "--fields", list) is None
 
 
-def test_coerce_json_none():
-    assert odoo.coerce_json(None) is None
+def test_parse_json_flag_rejects_non_json():
+    """A bare string must not fall through: Odoo would iterate it char by char."""
+    with pytest.raises(odoo.BadJsonFlag) as exc:
+        odoo.parse_json_flag("name,state", "--fields", list)
+    assert "--fields" in str(exc.value)
+    assert '["name","email"]' in str(exc.value)
+
+
+def test_parse_json_flag_rejects_wrong_shape():
+    with pytest.raises(odoo.BadJsonFlag) as exc:
+        odoo.parse_json_flag('{"a": 1}', "--fields", list)
+    assert "--fields" in str(exc.value)
+    assert "list" in str(exc.value)
 
 
 CONFIG = {
@@ -327,6 +340,27 @@ def test_main_search_read_maps(capsys, capture_client, tmp_path):
     assert kwargs["fields"] == ["name"]
     assert kwargs["limit"] == 5
     assert kwargs["offset"] == 0
+
+
+def test_main_search_read_rejects_csv_fields(capsys, capture_client, tmp_path):
+    """`--fields name,state` used to reach Odoo as a string (Invalid field 'i')."""
+    rc = odoo.main(
+        ["search-read", "res.partner", "--fields", "name,state"] + _no_config(tmp_path),
+        client_factory=capture_client["factory"],
+    )
+    assert rc == odoo.EXIT_USAGE
+    assert "--fields" in json.loads(capsys.readouterr().out)["error"]
+    assert capture_client["client"].calls == []
+
+
+def test_main_search_read_rejects_non_json_domain(capsys, capture_client, tmp_path):
+    rc = odoo.main(
+        ["search-read", "res.partner", "--domain", "is_company=true"] + _no_config(tmp_path),
+        client_factory=capture_client["factory"],
+    )
+    assert rc == odoo.EXIT_USAGE
+    assert "--domain" in json.loads(capsys.readouterr().out)["error"]
+    assert capture_client["client"].calls == []
 
 
 def test_main_search_read_default_domain(capsys, capture_client, tmp_path):

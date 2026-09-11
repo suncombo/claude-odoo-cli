@@ -76,17 +76,41 @@ class OdooClient:
         )
 
 
-def coerce_json(value):
-    """Parse a CLI flag value as JSON; fall back to the literal string.
+class BadJsonFlag(ValueError):
+    """A JSON flag that did not parse, or parsed to the wrong shape."""
 
-    Preserves the old MCP tolerance for arrays passed as strings.
+
+EXAMPLES = {
+    "--fields": '["name","email"]',
+    "--domain": '[["is_company","=",true]]',
+    "--ids": '[1,2]',
+    "--values": '{"name":"X"}',
+    "--args": '[[5]]',
+    "--kwargs": '{"default":{"name":"New"}}',
+    "--attributes": '["string","type"]',
+}
+
+
+def parse_json_flag(value, flag, expect):
+    """Parse a CLI JSON flag strictly. `expect` is list or dict.
+
+    No literal fallback: a bare string reaching Odoo is iterated char by char
+    ("Invalid field 'i'"), which hides the real mistake from the caller.
     """
     if value is None:
         return None
     try:
-        return json.loads(value)
-    except (json.JSONDecodeError, ValueError):
-        return value
+        parsed = json.loads(value)
+    except ValueError:
+        raise BadJsonFlag(
+            f"{flag} must be JSON, got {value!r} (example: {EXAMPLES[flag]})"
+        )
+    if not isinstance(parsed, expect):
+        raise BadJsonFlag(
+            f"{flag} must be a JSON {expect.__name__}, got {value!r} "
+            f"(example: {EXAMPLES[flag]})"
+        )
+    return parsed
 
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "odoo-cli" / "config.json"
@@ -219,7 +243,7 @@ def classify_error(exc, url):
 
     Order matters: ConnectionRefusedError is checked before its OSError base.
     """
-    if isinstance(exc, SafetyCapExceeded):
+    if isinstance(exc, (SafetyCapExceeded, BadJsonFlag)):
         return {"error": str(exc)}, EXIT_USAGE
     if isinstance(exc, ConnectionRefusedError):
         return {"error": f"Cannot connect to Odoo at {url}"}, EXIT_CONN
@@ -316,13 +340,13 @@ def cmd_search_read(client, args):
         "limit": args.limit if explicit_limit else SEARCH_READ_SAFETY_CAP,
         "offset": args.offset,
     }
-    fields = coerce_json(args.fields)
+    fields = parse_json_flag(args.fields, "--fields", list)
     if fields is not None:
         kwargs["fields"] = fields
     if args.order:
         kwargs["order"] = args.order
     kwargs.update(_context_kwargs(args))
-    domain = coerce_json(args.domain) or []
+    domain = parse_json_flag(args.domain, "--domain", list) or []
     result = client.execute_kw(args.model, "search_read", [domain], kwargs)
     if not explicit_limit and len(result) >= SEARCH_READ_SAFETY_CAP:
         raise SafetyCapExceeded(
@@ -335,15 +359,18 @@ def cmd_search_read(client, args):
 
 def cmd_read(client, args):
     kwargs = dict(_context_kwargs(args))
-    fields = coerce_json(args.fields)
+    fields = parse_json_flag(args.fields, "--fields", list)
     if fields is not None:
         kwargs["fields"] = fields
-    return client.execute_kw(args.model, "read", [coerce_json(args.ids)], kwargs)
+    return client.execute_kw(
+        args.model, "read", [parse_json_flag(args.ids, "--ids", list)], kwargs
+    )
 
 
 def cmd_create(client, args):
     return client.execute_kw(
-        args.model, "create", [coerce_json(args.values)], _context_kwargs(args)
+        args.model, "create",
+        [parse_json_flag(args.values, "--values", dict)], _context_kwargs(args),
     )
 
 
@@ -351,13 +378,16 @@ def cmd_write(client, args):
     return client.execute_kw(
         args.model,
         "write",
-        [coerce_json(args.ids), coerce_json(args.values)],
+        [parse_json_flag(args.ids, "--ids", list),
+         parse_json_flag(args.values, "--values", dict)],
         _context_kwargs(args),
     )
 
 
 def cmd_unlink(client, args):
-    return client.execute_kw(args.model, "unlink", [coerce_json(args.ids)])
+    return client.execute_kw(
+        args.model, "unlink", [parse_json_flag(args.ids, "--ids", list)]
+    )
 
 
 def cmd_list_models(client, args):
@@ -372,17 +402,17 @@ def cmd_list_models(client, args):
 
 def cmd_list_fields(client, args):
     kwargs = {}
-    attributes = coerce_json(args.attributes)
+    attributes = parse_json_flag(args.attributes, "--attributes", list)
     if attributes is not None:
         kwargs["attributes"] = attributes
     return client.execute_kw(args.model, "fields_get", [], kwargs)
 
 
 def cmd_execute_method(client, args):
-    kwargs = coerce_json(args.kwargs) or {}
+    kwargs = parse_json_flag(args.kwargs, "--kwargs", dict) or {}
     kwargs.update(_context_kwargs(args))
     return client.execute_kw(
-        args.model, args.method, coerce_json(args.args), kwargs or None
+        args.model, args.method, parse_json_flag(args.args, "--args", list), kwargs or None
     )
 
 

@@ -95,7 +95,8 @@ Prefix logic operators: `"&"` (AND, default), `"|"` (OR), `"!"` (NOT).
 - `create --values` takes a plain JSON object: `'{"name":"X"}'` (not wrapped in a list).
 - `execute-method --args` is a list of positional args: `copy([10])` → `--args '[[10]]'`;
   `write([id], vals)` → use the dedicated `write` command instead.
-- JSON flags tolerate a bare string: an unparseable value is passed through literally.
+- JSON flags are strict: a value that is not valid JSON of the right shape is a
+  usage error (exit 2) naming the flag and an example — nothing reaches Odoo.
 
 ## Common patterns
 
