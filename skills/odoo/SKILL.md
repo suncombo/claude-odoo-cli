@@ -111,7 +111,9 @@ Prefix logic operators: `"&"` (AND, default), `"|"` (OR), `"!"` (NOT).
   `[["lines.f","=",false]]` never matches a parent with no lines. To count parents
   by child conditions, `read_group` the child model by its parent field. On
   Odoo 13, `search_count` through an `auto_join` one2many counts one per matching
-  child, not per parent.
+  child, not per parent. `execute-method <model> search_count` warns on stderr when
+  the domain goes through such a path (stdout unchanged); act on it by switching to
+  the `read_group` above.
 - A non-stored field with no `search` implementation is silently dropped from the
   domain: Odoo logs an error and returns the unfiltered set. Check `store` with
   `list-fields` first; query the stored field on the related record instead

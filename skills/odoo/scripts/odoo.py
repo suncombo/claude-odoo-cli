@@ -413,12 +413,54 @@ def cmd_list_fields(client, args):
     return client.execute_kw(args.model, "fields_get", [], kwargs)
 
 
+def _dotted_domain_roots(domain):
+    """First path segment of every dotted leaf in a domain, prefix operators skipped."""
+    roots = set()
+    for item in domain:
+        is_leaf = isinstance(item, list) and len(item) == 3
+        if is_leaf and isinstance(item[0], str) and "." in item[0]:
+            roots.add(item[0].split(".", 1)[0])
+    return sorted(roots)
+
+
+def _warn_search_count_through_x2many(client, model, positional):
+    """search_count through a one2many/many2many counts children, not parents.
+
+    Each such condition means "some child matches", and on Odoo 13 an auto_join
+    one2many counts one row per matching child. Warn on stderr and let the call
+    run: a single condition through a non-auto_join relation counts parents fine,
+    so refusing would block legitimate use.
+    """
+    if not positional or not isinstance(positional[0], list):
+        return
+    roots = _dotted_domain_roots(positional[0])
+    if not roots:
+        return
+    schema = client.execute_kw(
+        model, "fields_get", [roots],
+        {"attributes": ["type", "relation", "relation_field"]},
+    )
+    for name in roots:
+        field = schema.get(name) or {}
+        if field.get("type") not in ("one2many", "many2many"):
+            continue
+        parent = field.get("relation_field") or "its parent field"
+        sys.stderr.write(
+            f"warning: search_count on {model} filters through {name} "
+            f"({field['type']}): each condition matches \"some child\", and on "
+            f"Odoo 13 an auto_join one2many counts one per matching child, not "
+            f"per parent. To count parents, read_group {field.get('relation')} "
+            f"by {parent} instead.\n"
+        )
+
+
 def cmd_execute_method(client, args):
     kwargs = parse_json_flag(args.kwargs, "--kwargs", dict) or {}
     kwargs.update(_context_kwargs(args, kwargs))
-    return client.execute_kw(
-        args.model, args.method, parse_json_flag(args.args, "--args", list), kwargs or None
-    )
+    positional = parse_json_flag(args.args, "--args", list)
+    if args.method == "search_count":
+        _warn_search_count_through_x2many(client, args.model, positional)
+    return client.execute_kw(args.model, args.method, positional, kwargs or None)
 
 
 def cmd_config(args):

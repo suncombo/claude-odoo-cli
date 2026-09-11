@@ -662,3 +662,71 @@ def test_writable_profile_still_writes(capture_client, tmp_path):
     )
     assert rc == odoo.EXIT_OK
     assert capture_client["client"].calls[0][1] == "write"
+
+
+class _SearchCountClient:
+    """fields_get answers with the schema; every other method answers 3."""
+
+    def __init__(self, schema):
+        self.schema = schema
+        self.calls = []
+
+    def execute_kw(self, model, method, args=None, kwargs=None):
+        self.calls.append((model, method, args, kwargs))
+        return self.schema if method == "fields_get" else 3
+
+
+def _search_count(capsys, tmp_path, schema, domain):
+    client = _SearchCountClient(schema)
+    rc = odoo.main(
+        ["execute-method", "sale.order", "search_count", "--args", json.dumps([domain])]
+        + _no_config(tmp_path),
+        client_factory=lambda **kw: client,
+    )
+    captured = capsys.readouterr()
+    assert rc == odoo.EXIT_OK
+    assert captured.out.strip() == "3"
+    return client, captured.err
+
+
+def test_search_count_through_one2many_warns_on_stderr(capsys, tmp_path):
+    schema = {"order_line": {"type": "one2many", "relation": "sale.order.line",
+                             "relation_field": "order_id"}}
+    client, err = _search_count(
+        capsys, tmp_path, schema, [["order_line.product_id", "!=", False]]
+    )
+    assert [c[1] for c in client.calls] == ["fields_get", "search_count"]
+    assert client.calls[0][2] == [["order_line"]]
+    assert client.calls[1][2] == [[["order_line.product_id", "!=", False]]]
+    assert err.startswith("warning: search_count on sale.order filters through order_line (one2many)")
+    assert "read_group sale.order.line by order_id" in err
+
+
+def test_search_count_through_many2many_names_its_parent_field_generically(capsys, tmp_path):
+    schema = {"tag_ids": {"type": "many2many", "relation": "crm.tag"}}
+    _, err = _search_count(capsys, tmp_path, schema, [["tag_ids.name", "=", "x"]])
+    assert "(many2many)" in err
+    assert "read_group crm.tag by its parent field" in err
+
+
+def test_search_count_without_dotted_path_makes_no_fields_get_call(capsys, tmp_path):
+    client, err = _search_count(capsys, tmp_path, {}, [["state", "=", "sale"]])
+    assert [c[1] for c in client.calls] == ["search_count"]
+    assert err == ""
+
+
+def test_search_count_through_many2one_stays_silent(capsys, tmp_path):
+    schema = {"partner_id": {"type": "many2one", "relation": "res.partner"}}
+    client, err = _search_count(capsys, tmp_path, schema, [["partner_id.name", "ilike", "a"]])
+    assert [c[1] for c in client.calls] == ["fields_get", "search_count"]
+    assert err == ""
+
+
+def test_search_count_skips_prefix_operators(capsys, tmp_path):
+    schema = {"order_line": {"type": "one2many", "relation": "sale.order.line",
+                             "relation_field": "order_id"}}
+    domain = ["|", "!", ["state", "=", "cancel"], "&",
+              ["order_line.product_id", "!=", False], ["order_line.qty", ">", 1]]
+    client, err = _search_count(capsys, tmp_path, schema, domain)
+    assert client.calls[0][2] == [["order_line"]]
+    assert err.count("warning:") == 1
