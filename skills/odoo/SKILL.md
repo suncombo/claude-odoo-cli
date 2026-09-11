@@ -92,7 +92,7 @@ Prefix logic operators: `"&"` (AND, default), `"|"` (OR), `"!"` (NOT).
 - OR: `["|", ["name","ilike","gold"], ["name","ilike","silver"]]`
 - AND+OR: `["&", ["active","=",true], "|", ["name","ilike","a"], ["name","ilike","b"]]`
 - `"!"` on `=like` / `=ilike` becomes SQL `NOT` and drops rows where the field is
-  NULL; `!=`, `not in`, `not like`, `not ilike` keep them. To negate a prefix match
+  NULL; `!= value`, `not in`, `not like`, `not ilike` keep them. To negate a prefix match
   without losing empties, count `[["f","=",false]]` separately and add it.
 - A condition through a one2many/many2many path means "some child matches". Two
   such conditions can be satisfied by two different children, and
